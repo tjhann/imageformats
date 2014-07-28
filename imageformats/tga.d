@@ -49,7 +49,7 @@ TGA_Header read_tga_header(InStream stream) {
     return header;
 }
 
-ubyte[] read_tga(in char[] filename, out int w, out int h, out int chans, int req_chans = 0) {
+ubyte[] read_tga(in char[] filename, out long w, out long h, out int chans, int req_chans = 0) {
     if (!filename.length)
         throw new ImageException("no filename");
     auto stream = new InStream(filename);
@@ -57,7 +57,7 @@ ubyte[] read_tga(in char[] filename, out int w, out int h, out int chans, int re
     return read_tga(stream, w, h, chans, req_chans);
 }
 
-ubyte[] read_tga(InStream stream, out int w, out int h, out int chans, int req_chans = 0) {
+ubyte[] read_tga(InStream stream, out long w, out long h, out int chans, int req_chans = 0) {
     if (stream is null || req_chans < 0 || 4 < req_chans)
         throw new ImageException("come on...");
 
@@ -131,7 +131,7 @@ ubyte[] read_tga(InStream stream, out int w, out int h, out int chans, int req_c
 
 private struct TGA_Decoder {
     InStream stream;
-    int w, h;
+    long w, h;
     bool origin_at_top;    // src
     int bytes_pp;
     bool rle;   // run length comressed
@@ -202,11 +202,11 @@ private ubyte[] decode_tga(ref TGA_Decoder dc) {
     return dc.result;
 }
 
-void write_tga(OutStream stream, size_t w, size_t h, in ubyte[] data, int tgt_chans = 0) {
+void write_tga(OutStream stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
     throw new ImageException("this is on the todo list");
 }
 
-private void read_tga_info(InStream stream, out int w, out int h, out int chans) {
+private void read_tga_info(InStream stream, out long w, out long h, out int chans) {
     TGA_Header hdr = read_tga_header(stream);
     w = hdr.width;
     h = hdr.height;

@@ -58,7 +58,7 @@ PNG_Header read_png_header(InStream stream) {
         3 -> RGB8
         4 -> RGBA8
 */
-ubyte[] read_png(in char[] filename, out int w, out int h, out int chans, int req_chans = 0) {
+ubyte[] read_png(in char[] filename, out long w, out long h, out int chans, int req_chans = 0) {
     if (!filename.length)
         throw new ImageException("no filename");
     auto stream = new InStream(filename);
@@ -66,7 +66,7 @@ ubyte[] read_png(in char[] filename, out int w, out int h, out int chans, int re
     return read_png(stream, w, h, chans, req_chans);
 }
 
-ubyte[] read_png(InStream stream, out int w, out int h, out int chans, int req_chans = 0) {
+ubyte[] read_png(InStream stream, out long w, out long h, out int chans, int req_chans = 0) {
     if (stream is null || req_chans < 0 || 4 < req_chans)
         throw new ImageException("come on...");
 
@@ -123,7 +123,7 @@ private struct PNG_Decoder {
     bool src_indexed;
     int src_chans;
     int tgt_chans;
-    int w, h;
+    long w, h;
 
     UnCompress uc;
     CRC32 crc;
@@ -358,7 +358,7 @@ private ubyte paeth(ubyte a, ubyte b, ubyte c) pure nothrow {
 
 // PNG encoder
 
-void write_png(in char[] filename, size_t w, size_t h, in ubyte[] data, int tgt_chans = 0) {
+void write_png(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0) {
     if (!filename.length)
         throw new ImageException("no filename");
     auto stream = new OutStream(filename);
@@ -367,7 +367,7 @@ void write_png(in char[] filename, size_t w, size_t h, in ubyte[] data, int tgt_
 }
 
 // NOTE: *caller* has to flush the stream
-void write_png(OutStream stream, size_t w, size_t h, in ubyte[] data, int tgt_chans = 0) {
+void write_png(OutStream stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
     if (stream is null)
         throw new ImageException("no stream");
     if (w < 1 || h < 1 || int.max < w || int.max < h)
@@ -497,7 +497,7 @@ private void write_IDAT_chunk(ref PNG_Encoder ec) {
     ec.writelen = 0;
 }
 
-private void read_png_info(InStream stream, out int w, out int h, out int chans) {
+private void read_png_info(InStream stream, out long w, out long h, out int chans) {
     PNG_Header hdr = read_png_header(stream);
     w = hdr.width;
     h = hdr.height;

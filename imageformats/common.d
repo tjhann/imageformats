@@ -16,7 +16,7 @@ class ImageException : Exception {
    }
 }
 
-void read_image_info(in char[] filename, out int w, out int h, out int chans) {
+void read_image_info(in char[] filename, out long w, out long h, out int chans) {
     const(char)[] ext = extract_extension_lowercase(filename);
 
     if (ext in register) {
@@ -32,7 +32,7 @@ void read_image_info(in char[] filename, out int w, out int h, out int chans) {
     throw new ImageException("unknown image extension/type");
 }
 
-ubyte[] read_image(in char[] filename, out int w, out int h, out int chans, int req_chans = 0) {
+ubyte[] read_image(in char[] filename, out long w, out long h, out int chans, int req_chans = 0) {
     const(char)[] ext = extract_extension_lowercase(filename);
 
     if (ext in register) {
@@ -47,7 +47,7 @@ ubyte[] read_image(in char[] filename, out int w, out int h, out int chans, int 
     throw new ImageException("unknown image extension/type");
 }
 
-void write_image(in char[] filename, size_t w, size_t h, in ubyte[] data, int req_chans = 0) {
+void write_image(in char[] filename, long w, long h, in ubyte[] data, int req_chans = 0) {
     const(char)[] ext = extract_extension_lowercase(filename);
 
     if (ext in register) {
@@ -72,9 +72,9 @@ private const(char)[] extract_extension_lowercase(in char[] filename) {
 // Register
 
 package struct ImageIOFuncs {
-    ubyte[] function(InStream s, out int w, out int h, out int c, int reqc) read_image;
-    void function(OutStream s, size_t w, size_t h, in ubyte[] data, int reqc) write_image;
-    void function(InStream s, out int w, out int h, out int c) read_info;
+    ubyte[] function(InStream s, out long w, out long h, out int c, int reqc) read_image;
+    void function(OutStream s, long w, long h, in ubyte[] data, int reqc) write_image;
+    void function(InStream s, out long w, out long h, out int c) read_info;
 }
 package static ImageIOFuncs[string] register;
 
