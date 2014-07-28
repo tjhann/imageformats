@@ -24,6 +24,7 @@ struct TGA_Header {
 
 TGA_Header read_tga_header(in char[] filename) {
     auto stream = new InStream(filename);
+    scope(exit) stream.close();
     return read_tga_header(stream);
 }
 
