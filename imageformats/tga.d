@@ -1,8 +1,8 @@
 // Copyright (c) 2014 Tero Hänninen
 // Boost Software License - Version 1.0 - August 17th, 2003
-module image.tga;
+module imageformats.tga;
 
-public import image.image;
+public import imageformats.common;
 
 import std.algorithm;   // min
 import std.bitmanip;      // bigEndianToNative()

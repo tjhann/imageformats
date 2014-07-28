@@ -1,9 +1,9 @@
 // Copyright (c) 2014 Tero Hänninen
 // Boost Software License - Version 1.0 - August 17th, 2003
 // TODO finish paletted images
-module image.png;
+module imageformats.png;
 
-public import image.image;
+public import imageformats.common;
 
 import std.algorithm;   // min
 import std.bitmanip;      // bigEndianToNative()
