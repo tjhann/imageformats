@@ -71,6 +71,22 @@ Image read_image(in char[] filename, int req_chans = 0) {
     throw new ImageException("unknown image extension/type");
 }
 
+void write_image(Image image, in char[] filename, int req_chans = 0) {
+    const(char)[] ext = extract_extension_lowercase(filename);
+
+    if (ext in register) {
+        ImageIOFuncs funcs = register[ext];
+        if (funcs.write_image is null)
+            throw new ImageException("null function pointer");
+        auto stream = new OutStream(filename);
+        scope(exit) stream.flush_and_close();
+        funcs.write_image(stream, image.w, image.h, image.data, req_chans);
+        return;
+    }
+
+    throw new ImageException("unknown image extension/type");
+}
+
 private const(char)[] extract_extension_lowercase(in char[] filename) {
     ptrdiff_t di = filename.lastIndexOf('.');
     return (0 < di && di+1 < filename.length) ? filename[di+1..$].toLower() : "";
@@ -81,6 +97,7 @@ private const(char)[] extract_extension_lowercase(in char[] filename) {
 
 struct ImageIOFuncs {
     ubyte[] function(InStream s, out int w, out int h, out int c, int reqc) read_image;
+    void function(OutStream s, size_t w, size_t h, in ubyte[] data, int reqc) write_image;
     ImageInfo function(InStream s) read_info;
 }
 package static ImageIOFuncs[string] register;

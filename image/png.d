@@ -503,5 +503,5 @@ private ImageInfo read_png_info(InStream stream) {
 }
 
 static this() {
-    register["png"] = ImageIOFuncs(&read_png, &read_png_info);
+    register["png"] = ImageIOFuncs(&read_png, &write_png, &read_png_info);
 }

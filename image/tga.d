@@ -202,11 +202,15 @@ private ubyte[] decode_tga(ref TGA_Decoder dc) {
     return dc.result;
 }
 
+void write_tga(OutStream stream, size_t w, size_t h, in ubyte[] data, int tgt_chans = 0) {
+    throw new ImageException("this is on the todo list");
+}
+
 private ImageInfo read_tga_info(InStream stream) {
     TGA_Header hdr = read_tga_header(stream);
     return ImageInfo(hdr.width, hdr.height);    // TODO format
 }
 
 static this() {
-    register["tga"] = ImageIOFuncs(&read_tga, &read_tga_info);
+    register["tga"] = ImageIOFuncs(&read_tga, &write_tga, &read_tga_info);
 }
