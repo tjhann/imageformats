@@ -4,7 +4,12 @@ module image.image;
 
 import std.string;  // toLower, lastIndexOf
 
-enum ColFmt : int {
+enum ColFmt_Y = 1;
+enum ColFmt_YA = 2;
+enum ColFmt_RGB = 3;
+enum ColFmt_RGBA = 4;
+
+package enum ColFmt : int {
     Unknown = 0,
     Y = 1,
     YA,
@@ -21,25 +26,7 @@ class ImageException : Exception {
    }
 }
 
-struct ImageInfo {
-    int w;
-    int h;
-    ColFmt fmt;
-}
-
-struct Image {
-    int width;      alias w = width;
-    int height;     alias h = height;
-    ColFmt fmt;
-    ubyte[] data;
-
-    @property string toString() const {
-        import std.conv;
-        return text("width: ", width, " height: ", height, " fmt: ", fmt);
-    }
-}
-
-ImageInfo read_image_info(in char[] filename) {
+void read_image_info(in char[] filename, out int w, out int h, out int chans) {
     const(char)[] ext = extract_extension_lowercase(filename);
 
     if (ext in register) {
@@ -48,30 +35,29 @@ ImageInfo read_image_info(in char[] filename) {
             throw new ImageException("null function pointer");
         auto stream = new InStream(filename);
         scope(exit) stream.close();
-        return funcs.read_info(stream);
+        funcs.read_info(stream, w, h, chans);
+        return;
     }
 
     throw new ImageException("unknown image extension/type");
 }
 
-Image read_image(in char[] filename, int req_chans = 0) {
+ubyte[] read_image(in char[] filename, out int w, out int h, out int chans, int req_chans = 0) {
     const(char)[] ext = extract_extension_lowercase(filename);
 
     if (ext in register) {
         ImageIOFuncs funcs = register[ext];
         if (funcs.read_image is null)
             throw new ImageException("null function pointer");
-        Image image;
         auto stream = new InStream(filename);
         scope(exit) stream.close();
-        image.data = funcs.read_image(stream, image.w, image.h, image.fmt, req_chans);
-        return image;
+        return funcs.read_image(stream, w, h, chans, req_chans);
     }
 
     throw new ImageException("unknown image extension/type");
 }
 
-void write_image(Image image, in char[] filename, int req_chans = 0) {
+void write_image(in char[] filename, size_t w, size_t h, in ubyte[] data, int req_chans = 0) {
     const(char)[] ext = extract_extension_lowercase(filename);
 
     if (ext in register) {
@@ -80,7 +66,7 @@ void write_image(Image image, in char[] filename, int req_chans = 0) {
             throw new ImageException("null function pointer");
         auto stream = new OutStream(filename);
         scope(exit) stream.flush_and_close();
-        funcs.write_image(stream, image.w, image.h, image.data, req_chans);
+        funcs.write_image(stream, w, h, data, req_chans);
         return;
     }
 
@@ -98,7 +84,7 @@ private const(char)[] extract_extension_lowercase(in char[] filename) {
 struct ImageIOFuncs {
     ubyte[] function(InStream s, out int w, out int h, out int c, int reqc) read_image;
     void function(OutStream s, size_t w, size_t h, in ubyte[] data, int reqc) write_image;
-    ImageInfo function(InStream s) read_info;
+    void function(InStream s, out int w, out int h, out int c) read_info;
 }
 package static ImageIOFuncs[string] register;
 

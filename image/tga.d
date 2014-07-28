@@ -206,9 +206,11 @@ void write_tga(OutStream stream, size_t w, size_t h, in ubyte[] data, int tgt_ch
     throw new ImageException("this is on the todo list");
 }
 
-private ImageInfo read_tga_info(InStream stream) {
+private void read_tga_info(InStream stream, out int w, out int h, out int chans) {
     TGA_Header hdr = read_tga_header(stream);
-    return ImageInfo(hdr.width, hdr.height);    // TODO format
+    w = hdr.width;
+    h = hdr.height;
+    chans = 0;  // TODO
 }
 
 static this() {
