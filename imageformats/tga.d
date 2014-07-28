@@ -63,7 +63,8 @@ ubyte[] read_tga(InStream stream, out long w, out long h, out int chans, int req
 
     TGA_Header hdr = read_tga_header(stream);
 
-    // flags:  ilace1  ilace0  v-flipped  0  attr_bits:3-0
+    if (hdr.width < 1 || hdr.height < 1)
+        throw new ImageException("invalid dimensions");
     if (hdr.flags & 0xc0)   // two bits
         throw new ImageException("interlaced TGAs not supported");
     ubyte attr_bits_pp = (hdr.flags & 0xf);
