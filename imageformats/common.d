@@ -71,7 +71,7 @@ private const(char)[] extract_extension_lowercase(in char[] filename) {
 // --------------------------------------------------------------------------------
 // Register
 
-struct ImageIOFuncs {
+package struct ImageIOFuncs {
     ubyte[] function(InStream s, out int w, out int h, out int c, int reqc) read_image;
     void function(OutStream s, size_t w, size_t h, in ubyte[] data, int reqc) write_image;
     void function(InStream s, out int w, out int h, out int c) read_info;
