@@ -9,16 +9,6 @@ enum ColFmt_YA = 2;
 enum ColFmt_RGB = 3;
 enum ColFmt_RGBA = 4;
 
-package enum ColFmt : int {
-    Unknown = 0,
-    Y = 1,
-    YA,
-    RGB,
-    RGBA,
-    BGR,
-    BGRA,
-}
-
 class ImageException : Exception {
    @safe pure const
    this(string msg, string file = __FILE__, size_t line = __LINE__) {
@@ -90,6 +80,16 @@ package static ImageIOFuncs[string] register;
 
 // --------------------------------------------------------------------------------
 // Conversions
+
+package enum ColFmt : int {
+    Unknown = 0,
+    Y = 1,
+    YA,
+    RGB,
+    RGBA,
+    BGR,
+    BGRA,
+}
 
 package pure
 void function(in ubyte[] src, ubyte[] tgt) get_converter(int src_chans, int tgt_chans) {
