@@ -51,7 +51,7 @@ TGA_Header read_tga_header(InStream stream) {
 
 ubyte[] read_tga(in char[] filename, out long w, out long h, out int chans, int req_chans = 0) {
     if (!filename.length)
-        throw new ImageException("no filename");
+        throw new ImageIOException("no filename");
     auto stream = new InStream(filename);
     scope(exit) stream.close();
     return read_tga(stream, w, h, chans, req_chans);
@@ -59,39 +59,39 @@ ubyte[] read_tga(in char[] filename, out long w, out long h, out int chans, int 
 
 ubyte[] read_tga(InStream stream, out long w, out long h, out int chans, int req_chans = 0) {
     if (stream is null || req_chans < 0 || 4 < req_chans)
-        throw new ImageException("come on...");
+        throw new ImageIOException("come on...");
 
     TGA_Header hdr = read_tga_header(stream);
 
     if (hdr.width < 1 || hdr.height < 1)
-        throw new ImageException("invalid dimensions");
+        throw new ImageIOException("invalid dimensions");
     if (hdr.flags & 0xc0)   // two bits
-        throw new ImageException("interlaced TGAs not supported");
+        throw new ImageIOException("interlaced TGAs not supported");
     ubyte attr_bits_pp = (hdr.flags & 0xf);
     if (! (attr_bits_pp == 0 || attr_bits_pp == 8)) // some set it 0 although data has 8
-        throw new ImageException("only 8-bit alpha/attribute(s) supported");
+        throw new ImageIOException("only 8-bit alpha/attribute(s) supported");
     if (hdr.palette_type)
-        throw new ImageException("paletted TGAs not supported");
+        throw new ImageIOException("paletted TGAs not supported");
 
     bool rle = false;
     switch (hdr.data_type) {
         //case 1: ;   // paletted, uncompressed
         case 2: if (! (hdr.bits_pp == 24 || hdr.bits_pp == 32))
-                    throw new ImageException("not supported");
+                    throw new ImageIOException("not supported");
                 break;      // RGB/RGBA, uncompressed
         case 3: if (! (hdr.bits_pp == 8 || hdr.bits_pp == 16))
-                    throw new ImageException("not supported");
+                    throw new ImageIOException("not supported");
                 break;      // gray, uncompressed
         //case 9: ;   // paletted, RLE
         case 10: if (! (hdr.bits_pp == 24 || hdr.bits_pp == 32))
-                    throw new ImageException("not supported");
+                    throw new ImageIOException("not supported");
                  rle = true;
                  break;     // RGB/RGBA, RLE
         case 11: if (! (hdr.bits_pp == 8 || hdr.bits_pp == 16))
-                    throw new ImageException("not supported");
+                    throw new ImageIOException("not supported");
                  rle = true;
                  break;     // gray, RLE
-        default: throw new ImageException("data type not supported");
+        default: throw new ImageIOException("data type not supported");
     }
 
     int src_chans = hdr.bits_pp / 8;
@@ -116,7 +116,7 @@ ubyte[] read_tga(InStream stream, out long w, out long h, out int chans, int req
         case 2: dc.src_fmt = ColFmt.YA; break;
         case 3: dc.src_fmt = ColFmt.BGR; break;
         case 4: dc.src_fmt = ColFmt.BGRA; break;
-        default: throw new ImageException("TGA: format not supported");
+        default: throw new ImageIOException("TGA: format not supported");
     }
 
     //import std.stdio;
@@ -204,7 +204,7 @@ private ubyte[] decode_tga(ref TGA_Decoder dc) {
 }
 
 void write_tga(OutStream stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
-    throw new ImageException("this is on the todo list");
+    throw new ImageIOException("this is on the todo list");
 }
 
 private void read_tga_info(InStream stream, out long w, out long h, out int chans) {

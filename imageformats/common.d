@@ -9,7 +9,7 @@ enum ColFmt_YA = 2;
 enum ColFmt_RGB = 3;
 enum ColFmt_RGBA = 4;
 
-class ImageException : Exception {
+class ImageIOException : Exception {
    @safe pure const
    this(string msg, string file = __FILE__, size_t line = __LINE__) {
        super(msg, file, line);
@@ -22,14 +22,14 @@ void read_image_info(in char[] filename, out long w, out long h, out int chans) 
     if (ext in register) {
         ImageIOFuncs funcs = register[ext];
         if (funcs.read_info is null)
-            throw new ImageException("null function pointer");
+            throw new ImageIOException("null function pointer");
         auto stream = new InStream(filename);
         scope(exit) stream.close();
         funcs.read_info(stream, w, h, chans);
         return;
     }
 
-    throw new ImageException("unknown image extension/type");
+    throw new ImageIOException("unknown image extension/type");
 }
 
 ubyte[] read_image(in char[] filename, out long w, out long h, out int chans, int req_chans = 0) {
@@ -38,13 +38,13 @@ ubyte[] read_image(in char[] filename, out long w, out long h, out int chans, in
     if (ext in register) {
         ImageIOFuncs funcs = register[ext];
         if (funcs.read_image is null)
-            throw new ImageException("null function pointer");
+            throw new ImageIOException("null function pointer");
         auto stream = new InStream(filename);
         scope(exit) stream.close();
         return funcs.read_image(stream, w, h, chans, req_chans);
     }
 
-    throw new ImageException("unknown image extension/type");
+    throw new ImageIOException("unknown image extension/type");
 }
 
 void write_image(in char[] filename, long w, long h, in ubyte[] data, int req_chans = 0) {
@@ -53,14 +53,14 @@ void write_image(in char[] filename, long w, long h, in ubyte[] data, int req_ch
     if (ext in register) {
         ImageIOFuncs funcs = register[ext];
         if (funcs.write_image is null)
-            throw new ImageException("null function pointer");
+            throw new ImageIOException("null function pointer");
         auto stream = new OutStream(filename);
         scope(exit) stream.flush_and_close();
         funcs.write_image(stream, w, h, data, req_chans);
         return;
     }
 
-    throw new ImageException("unknown image extension/type");
+    throw new ImageIOException("unknown image extension/type");
 }
 
 private const(char)[] extract_extension_lowercase(in char[] filename) {
@@ -116,7 +116,7 @@ void function(in ubyte[] src, ubyte[] tgt) get_converter(int src_chans, int tgt_
         case combo(BGRA, YA)   : return &BGRA_to_YA;
         case combo(BGRA, RGB)  : return &BGRA_to_RGB;
         case combo(BGRA, RGBA) : return &BGRA_to_RGBA;
-        default                : throw new ImageException("internal error");
+        default                : throw new ImageIOException("internal error");
     }
 }
 
@@ -280,10 +280,10 @@ package class InStream {
         if (bytes == 0)
             return;
         if (block.length < bytes)
-            throw new ImageException("not enough space in buffer");
+            throw new ImageIOException("not enough space in buffer");
         size_t rlen = f.rawRead(block[0..bytes]).length;
         if (rlen != bytes)
-            throw new ImageException("not enough data");
+            throw new ImageIOException("not enough data");
     }
 
     size_t readBlock(ubyte[] block, size_t wanted = size_t.max) nothrow {

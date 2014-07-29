@@ -36,7 +36,7 @@ PNG_Header read_png_header(InStream stream) {
     if ( tmp[0..8] != png_file_header[0..$]              ||
          tmp[8..16] != [0x0,0x0,0x0,0xd,'I','H','D','R'] ||
          crc32Of(tmp[12..29]).reverse != tmp[29..33] )
-        throw new ImageException("corrupt header");
+        throw new ImageIOException("corrupt header");
 
     PNG_Header header = {
         width              : bigEndianToNative!int(tmp[16..20]),
@@ -60,7 +60,7 @@ PNG_Header read_png_header(InStream stream) {
 */
 ubyte[] read_png(in char[] filename, out long w, out long h, out int chans, int req_chans = 0) {
     if (!filename.length)
-        throw new ImageException("no filename");
+        throw new ImageIOException("no filename");
     auto stream = new InStream(filename);
     scope(exit) stream.close();
     return read_png(stream, w, h, chans, req_chans);
@@ -68,22 +68,22 @@ ubyte[] read_png(in char[] filename, out long w, out long h, out int chans, int 
 
 ubyte[] read_png(InStream stream, out long w, out long h, out int chans, int req_chans = 0) {
     if (stream is null || req_chans < 0 || 4 < req_chans)
-        throw new ImageException("come on...");
+        throw new ImageIOException("come on...");
 
     PNG_Header hdr = read_png_header(stream);
 
     if (hdr.width < 1 || hdr.height < 1 || int.max < cast(ulong) hdr.width * hdr.height)
-        throw new ImageException("invalid dimensions");
+        throw new ImageIOException("invalid dimensions");
     if (hdr.bit_depth != 8)
-        throw new ImageException("only 8-bit images supported");
+        throw new ImageIOException("only 8-bit images supported");
     if (! (hdr.color_type == PNG_ColorType.Y    ||
            hdr.color_type == PNG_ColorType.RGB  ||
            hdr.color_type == PNG_ColorType.Idx  ||
            hdr.color_type == PNG_ColorType.YA   ||
            hdr.color_type == PNG_ColorType.RGBA) )
-        throw new ImageException("color type not supported");
+        throw new ImageIOException("color type not supported");
     if (hdr.compression_method != 0 || hdr.filter_method != 0 || hdr.interlace_method != 0)
-        throw new ImageException("not supported");
+        throw new ImageIOException("not supported");
 
     PNG_Decoder dc;
     dc.stream = stream;
@@ -151,42 +151,42 @@ private ubyte[] decode_png(ref PNG_Decoder dc) {
     while (stage != Stage.IEND_parsed) {
         int len = bigEndianToNative!int(dc.chunkmeta[4..8]);
         if (len < 0)
-            throw new ImageException("chunk too long");
+            throw new ImageIOException("chunk too long");
 
         // standard allows PLTE chunk for RGB and RGBA too but we don't
         switch (cast(char[]) dc.chunkmeta[8..12]) {    // chunk type
             case "IDAT":
                 if (! (stage == Stage.IHDR_parsed ||
                       (stage == Stage.PLTE_parsed && dc.src_indexed)) )
-                    throw new ImageException("corrupt chunk stream");
+                    throw new ImageIOException("corrupt chunk stream");
                 read_IDAT_stream(dc, len);
                 stage = Stage.IDAT_parsed;
                 break;
             case "PLTE":
                 if (stage != Stage.IHDR_parsed)
-                    throw new ImageException("corrupt chunk stream");
+                    throw new ImageIOException("corrupt chunk stream");
                 int entries = len / 3;
                 if (len % 3 != 0 || 256 < entries)
-                    throw new ImageException("corrupt chunk");
+                    throw new ImageIOException("corrupt chunk");
                 dc.palette = new ubyte[len];
                 dc.stream.readExact(dc.palette, dc.palette.length);
                 dc.crc.put(dc.chunkmeta[8..12]);  // type
                 dc.crc.put(dc.palette);
                 dc.stream.readExact(dc.chunkmeta, 12); // crc | len, type
                 if (dc.crc.finish.reverse != dc.chunkmeta[0..4])
-                    throw new ImageException("corrupt chunk");
+                    throw new ImageIOException("corrupt chunk");
                 stage = Stage.PLTE_parsed;
                 break;
             case "IEND":
                 if (stage != Stage.IDAT_parsed)
-                    throw new ImageException("corrupt chunk stream");
+                    throw new ImageIOException("corrupt chunk stream");
                 dc.stream.readExact(dc.chunkmeta, 4); // crc
                 if (len != 0 || dc.chunkmeta[0..4] != [0xae, 0x42, 0x60, 0x82])
-                    throw new ImageException("corrupt chunk");
+                    throw new ImageIOException("corrupt chunk");
                 stage = Stage.IEND_parsed;
                 break;
             case "IHDR":
-                throw new ImageException("corrupt chunk stream");
+                throw new ImageIOException("corrupt chunk stream");
             default:
                 // unknown chunk, ignore but check crc
                 dc.crc.put(dc.chunkmeta[8..12]);  // type
@@ -198,7 +198,7 @@ private ubyte[] decode_png(ref PNG_Decoder dc) {
                 }
                 dc.stream.readExact(dc.chunkmeta, 12); // crc | len, type
                 if (dc.crc.finish.reverse != dc.chunkmeta[0..4])
-                    throw new ImageException("corrupt chunk");
+                    throw new ImageIOException("corrupt chunk");
         }
     }
 
@@ -256,7 +256,7 @@ private void read_IDAT_stream(ref PNG_Decoder dc, int len) {
     if (!metaready) {
         dc.stream.readExact(dc.chunkmeta, 12);   // crc | len & type
         if (dc.crc.finish.reverse != dc.chunkmeta[0..4])
-            throw new ImageException("corrupt chunk");
+            throw new ImageIOException("corrupt chunk");
     }
 }
 
@@ -273,7 +273,7 @@ private void uncompress_line(ref PNG_Decoder dc, ref int length, ref bool metare
         if (length <= 0) {  // IDAT is read -> read next chunks meta
             dc.stream.readExact(dc.chunkmeta, 12);   // crc | len & type
             if (dc.crc.finish.reverse != dc.chunkmeta[0..4])
-                throw new ImageException("corrupt chunk");
+                throw new ImageIOException("corrupt chunk");
 
             length = bigEndianToNative!int(dc.chunkmeta[4..8]);
             if (dc.chunkmeta[8..12] != "IDAT") {
@@ -282,13 +282,13 @@ private void uncompress_line(ref PNG_Decoder dc, ref int length, ref bool metare
                 dc.uc_buf = cast(ubyte[]) dc.uc.flush();
                 size_t part2 = dst.length - readysize;
                 if (dc.uc_buf.length < part2)
-                    throw new ImageException("not enough data");
+                    throw new ImageIOException("not enough data");
                 dst[readysize .. readysize+part2] = dc.uc_buf[0 .. part2];
                 dc.uc_buf = dc.uc_buf[part2 .. $];
                 return;
             }
             if (length <= 0)    // empty IDAT chunk
-                throw new ImageException("not enough data");
+                throw new ImageIOException("not enough data");
             dc.crc.put(dc.chunkmeta[8..12]);  // type
         }
 
@@ -298,7 +298,7 @@ private void uncompress_line(ref PNG_Decoder dc, ref int length, ref bool metare
         dc.crc.put(dc.read_buf[0..bytes_read]);
 
         if (bytes_read <= 0)
-            throw new ImageException("not enough data");
+            throw new ImageIOException("not enough data");
 
         dc.uc_buf = cast(ubyte[]) dc.uc.uncompress(dc.read_buf[0..bytes_read].dup);
 
@@ -335,7 +335,7 @@ private void recon(ubyte[] cline, in ubyte[] pline, ubyte ftype, int fstep) pure
                 cline[i] += paeth(cline[i-fstep], pline[i], pline[i-fstep]);
             break;
         default:
-            throw new ImageException("filter type not supported");
+            throw new ImageIOException("filter type not supported");
     }
 }
 
@@ -360,7 +360,7 @@ private ubyte paeth(ubyte a, ubyte b, ubyte c) pure nothrow {
 
 void write_png(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0) {
     if (!filename.length)
-        throw new ImageException("no filename");
+        throw new ImageIOException("no filename");
     auto stream = new OutStream(filename);
     scope(exit) stream.flush_and_close();
     write_png(stream, w, h, data, tgt_chans);
@@ -369,14 +369,14 @@ void write_png(in char[] filename, long w, long h, in ubyte[] data, int tgt_chan
 // NOTE: *caller* has to flush the stream
 void write_png(OutStream stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
     if (stream is null)
-        throw new ImageException("no stream");
+        throw new ImageIOException("no stream");
     if (w < 1 || h < 1 || int.max < w || int.max < h)
-        throw new ImageException("invalid dimensions");
+        throw new ImageIOException("invalid dimensions");
     ulong src_chans = data.length / w / h;
     if (src_chans < 1 || 4 < src_chans || tgt_chans < 0 || 4 < tgt_chans)
-        throw new ImageException("invalid channel count");
+        throw new ImageIOException("invalid channel count");
     if (src_chans * w * h != data.length)
-        throw new ImageException("mismatching dimensions and length");
+        throw new ImageIOException("mismatching dimensions and length");
 
     PNG_Encoder ec;
     ec.stream = stream;
