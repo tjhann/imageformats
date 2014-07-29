@@ -67,6 +67,8 @@ ubyte[] read_tga(InStream stream, out long w, out long h, out int chans, int req
         throw new ImageIOException("invalid dimensions");
     if (hdr.flags & 0xc0)   // two bits
         throw new ImageIOException("interlaced TGAs not supported");
+    if (hdr.flags & 0x10)
+        throw new ImageIOException("right-to-left TGAs not supported");
     ubyte attr_bits_pp = (hdr.flags & 0xf);
     if (! (attr_bits_pp == 0 || attr_bits_pp == 8)) // some set it 0 although data has 8
         throw new ImageIOException("only 8-bit alpha/attribute(s) supported");
@@ -74,23 +76,27 @@ ubyte[] read_tga(InStream stream, out long w, out long h, out int chans, int req
         throw new ImageIOException("paletted TGAs not supported");
 
     bool rle = false;
-    switch (hdr.data_type) {
+    switch (hdr.data_type) with (TGA_DataType) {
         //case 1: ;   // paletted, uncompressed
-        case 2: if (! (hdr.bits_pp == 24 || hdr.bits_pp == 32))
-                    throw new ImageIOException("not supported");
-                break;      // RGB/RGBA, uncompressed
-        case 3: if (! (hdr.bits_pp == 8 || hdr.bits_pp == 16))
-                    throw new ImageIOException("not supported");
-                break;      // gray, uncompressed
+        case TrueColor:
+            if (! (hdr.bits_pp == 24 || hdr.bits_pp == 32))
+                throw new ImageIOException("not supported");
+            break;
+        case Gray:
+            if (! (hdr.bits_pp == 8 || (hdr.bits_pp == 16 && attr_bits_pp == 8)))
+                throw new ImageIOException("not supported");
+            break;
         //case 9: ;   // paletted, RLE
-        case 10: if (! (hdr.bits_pp == 24 || hdr.bits_pp == 32))
-                    throw new ImageIOException("not supported");
-                 rle = true;
-                 break;     // RGB/RGBA, RLE
-        case 11: if (! (hdr.bits_pp == 8 || hdr.bits_pp == 16))
-                    throw new ImageIOException("not supported");
-                 rle = true;
-                 break;     // gray, RLE
+        case TrueColor_RLE:
+            if (! (hdr.bits_pp == 24 || hdr.bits_pp == 32))
+                throw new ImageIOException("not supported");
+            rle = true;
+            break;
+        case Gray_RLE:
+            if (! (hdr.bits_pp == 8 || (hdr.bits_pp == 16 && attr_bits_pp == 8)))
+                throw new ImageIOException("not supported");
+            rle = true;
+            break;
         default: throw new ImageIOException("data type not supported");
     }
 
@@ -274,9 +280,10 @@ private void write_tga(ref TGA_Encoder ec) {
 }
 
 private enum TGA_DataType : ubyte {
-    Idx           = 1,
+    //Idx           = 1,
     TrueColor     = 2,
     Gray          = 3,
+    //Idx_RLE       = 9,
     TrueColor_RLE = 10,
     Gray_RLE      = 11,
 }
