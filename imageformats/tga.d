@@ -11,13 +11,13 @@ struct TGA_Header {
    ubyte id_length;
    ubyte palette_type;
    ubyte data_type;
-   short palette_start;
-   short palette_length;
+   ushort palette_start;
+   ushort palette_length;
    ubyte palette_bits;
-   short x_origin;
-   short y_origin;
-   short width;
-   short height;
+   ushort x_origin;
+   ushort y_origin;
+   ushort width;
+   ushort height;
    ubyte bits_pp;
    ubyte flags;
 }
@@ -36,13 +36,13 @@ TGA_Header read_tga_header(InStream stream) {
         id_length       : tmp[0],
         palette_type    : tmp[1],
         data_type       : tmp[2],
-        palette_start   : littleEndianToNative!short(tmp[3..5]),
-        palette_length  : littleEndianToNative!short(tmp[5..7]),
+        palette_start   : littleEndianToNative!ushort(tmp[3..5]),
+        palette_length  : littleEndianToNative!ushort(tmp[5..7]),
         palette_bits    : tmp[7],
-        x_origin        : littleEndianToNative!short(tmp[8..10]),
-        y_origin        : littleEndianToNative!short(tmp[10..12]),
-        width           : littleEndianToNative!short(tmp[12..14]),
-        height          : littleEndianToNative!short(tmp[14..16]),
+        x_origin        : littleEndianToNative!ushort(tmp[8..10]),
+        y_origin        : littleEndianToNative!ushort(tmp[10..12]),
+        width           : littleEndianToNative!ushort(tmp[12..14]),
+        height          : littleEndianToNative!ushort(tmp[14..16]),
         bits_pp         : tmp[16],
         flags           : tmp[17],
     };
