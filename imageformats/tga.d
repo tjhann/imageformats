@@ -203,8 +203,82 @@ private ubyte[] decode_tga(ref TGA_Decoder dc) {
     return dc.result;
 }
 
+// TGA encoder
+
+void write_tga(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0) {
+    if (!filename.length)
+        throw new ImageIOException("no filename");
+    auto stream = new OutStream(filename);
+    scope(exit) stream.flush_and_close();
+    write_tga(stream, w, h, data, tgt_chans);
+}
+
 void write_tga(OutStream stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
-    throw new ImageIOException("this is on the todo list");
+    if (stream is null)
+        throw new ImageIOException("no stream");
+    if (w < 1 || h < 1 || ushort.max < w || ushort.max < h)
+        throw new ImageIOException("invalid dimensions");
+    ulong src_chans = data.length / w / h;
+    if (src_chans < 1 || 4 < src_chans || tgt_chans < 0 || 4 < tgt_chans)
+        throw new ImageIOException("invalid channel count");
+    if (src_chans * w * h != data.length)
+        throw new ImageIOException("mismatching dimensions and length");
+
+    TGA_Encoder ec;
+    ec.stream = stream;
+    ec.w = cast(ushort) w;
+    ec.h = cast(ushort) h;
+    ec.src_chans = cast(int) src_chans;
+    ec.tgt_chans = (tgt_chans) ? tgt_chans : ec.src_chans;
+    ec.rle = 0; // TODO
+    ec.data = data;
+
+    write_tga(ec);
+}
+
+private struct TGA_Encoder {
+    OutStream stream;
+    ushort w, h;
+    int src_chans;
+    int tgt_chans;
+    bool rle;   // run length compression
+    const(ubyte)[] data;
+}
+
+private void write_tga(ref TGA_Encoder ec) {
+    ubyte data_type;
+    bool has_alpha = false;
+    switch (ec.tgt_chans) with (TGA_DataType) {
+        case 1: data_type = ec.rle ? Gray_RLE : Gray;                             break;
+        case 2: data_type = ec.rle ? Gray_RLE : Gray;           has_alpha = true; break;
+        case 3: data_type = ec.rle ? TrueColor_RLE : TrueColor;                   break;
+        case 4: data_type = ec.rle ? TrueColor_RLE : TrueColor; has_alpha = true; break;
+        default: throw new ImageIOException("internal error");
+    }
+
+    ubyte[18] hdr = void;
+    hdr[0] = 0;         // id length
+    hdr[1] = 0;         // palette type
+    hdr[2] = data_type;
+    hdr[3..8] = 0;         // palette start (2), len (2), bits per palette entry (1)
+    hdr[8..12] = 0;     // x origin (2), y origin (2)
+    hdr[12..14] = nativeToLittleEndian(ec.w);
+    hdr[14..16] = nativeToLittleEndian(ec.h);
+    hdr[16] = cast(ubyte) (ec.tgt_chans * 8);     // bits per pixel
+    //hdr[17] = 0x20;     // flags: origin at top
+    hdr[17] = (has_alpha) ? 0x8 : 0x0;     // flags: attr_bits_pp = 8
+    ec.stream.writeBlock(hdr);
+
+    // write image data...
+    // write footer...
+}
+
+private enum TGA_DataType : ubyte {
+    Idx           = 1,
+    TrueColor     = 2,
+    Gray          = 3,
+    TrueColor_RLE = 10,
+    Gray_RLE      = 11,
 }
 
 private void read_tga_info(InStream stream, out long w, out long h, out int chans) {
