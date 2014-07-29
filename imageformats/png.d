@@ -389,7 +389,7 @@ void write_png(OutStream stream, long w, long h, in ubyte[] data, int tgt_chans 
     write_png(ec);
 }
 
-struct PNG_Encoder {
+private struct PNG_Encoder {
     OutStream stream;
     int w, h;
     int src_chans;
