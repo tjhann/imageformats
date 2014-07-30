@@ -270,7 +270,12 @@ private void write_tga(ref TGA_Encoder ec) {
     ec.stream.writeBlock(hdr);
 
     write_image_data(ec);
-    // write footer...
+
+    ubyte[26] ftr = void;
+    ftr[0..4] = 0;   // extension area offset
+    ftr[4..8] = 0;   // developer directory offset
+    ftr[8..26] = ['T','R','U','E','V','I','S','I','O','N','-','X','F','I','L','E','.', 0];
+    ec.stream.writeBlock(ftr);
 }
 
 private void write_image_data(ref TGA_Encoder ec) {
