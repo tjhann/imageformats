@@ -107,7 +107,6 @@ ubyte[] read_tga(InStream stream, out long w, out long h, out int chans, int req
         stream.readExact(shitbuf, hdr.id_length);   // FIXME
     }
 
-    // set decoder...
     TGA_Decoder dc;
     dc.stream         = stream;
     dc.w              = hdr.width;
@@ -124,11 +123,6 @@ ubyte[] read_tga(InStream stream, out long w, out long h, out int chans, int req
         case 4: dc.src_fmt = ColFmt.BGRA; break;
         default: throw new ImageIOException("TGA: format not supported");
     }
-
-    //import std.stdio;
-    //writeln("src_fmt: ", dc.src_fmt);
-    //writeln("origin: ", (dc.origin_at_top) ? "top left" : "bottom left");
-    //writeln("rle: ", dc.rle);
 
     w = dc.w;
     h = dc.h;
