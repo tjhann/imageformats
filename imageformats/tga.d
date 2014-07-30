@@ -219,6 +219,7 @@ void write_tga(in char[] filename, long w, long h, in ubyte[] data, int tgt_chan
     write_tga(stream, w, h, data, tgt_chans);
 }
 
+// NOTE: the caller should flush the stream
 void write_tga(OutStream stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
     if (stream is null)
         throw new ImageIOException("no stream");
@@ -271,12 +272,43 @@ private void write_tga(ref TGA_Encoder ec) {
     hdr[12..14] = nativeToLittleEndian(ec.w);
     hdr[14..16] = nativeToLittleEndian(ec.h);
     hdr[16] = cast(ubyte) (ec.tgt_chans * 8);     // bits per pixel
-    //hdr[17] = 0x20;     // flags: origin at top
     hdr[17] = (has_alpha) ? 0x8 : 0x0;     // flags: attr_bits_pp = 8
     ec.stream.writeBlock(hdr);
 
-    // write image data...
+    write_image_data(ec);
     // write footer...
+}
+
+private void write_image_data(ref TGA_Encoder ec) {
+    immutable long src_linesize = ec.w * ec.src_chans;
+    immutable long tgt_linesize = ec.w * ec.tgt_chans;
+    auto tgt_line = new ubyte[tgt_linesize];
+
+    long si = (ec.h-1) * src_linesize;     // origin at bottom
+
+    ColFmt tgt_fmt;
+    switch (ec.tgt_chans) {
+        case 1: tgt_fmt = ColFmt.Y; break;
+        case 2: tgt_fmt = ColFmt.YA; break;
+        case 3: tgt_fmt = ColFmt.BGR; break;
+        case 4: tgt_fmt = ColFmt.BGRA; break;
+        default: throw new ImageIOException("TGA: format not supported");
+    }
+
+    void function(in ubyte[] src_line, ubyte[] tgt_line) convert;
+    convert = get_converter(ec.src_chans, tgt_fmt);
+
+    if (!ec.rle) {
+        foreach (_; 0 .. ec.h) {
+            convert(ec.data[si .. si + src_linesize], tgt_line);
+            ec.stream.writeBlock(tgt_line);
+            si -= src_linesize; // origin at bottom
+        }
+        return;
+    }
+
+    // ----- RLE  -----
+    // TODO rle
 }
 
 private enum TGA_DataType : ubyte {

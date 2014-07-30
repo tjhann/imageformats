@@ -99,15 +99,23 @@ void function(in ubyte[] src, ubyte[] tgt) get_converter(int src_chans, int tgt_
         case combo(Y, YA)      : return &Y_to_YA;
         case combo(Y, RGB)     : return &Y_to_RGB;
         case combo(Y, RGBA)    : return &Y_to_RGBA;
+        case combo(Y, BGR)     : return &Y_to_BGR;
+        case combo(Y, BGRA)    : return &Y_to_BGRA;
         case combo(YA, Y)      : return &YA_to_Y;
         case combo(YA, RGB)    : return &YA_to_RGB;
         case combo(YA, RGBA)   : return &YA_to_RGBA;
+        case combo(YA, BGR)    : return &YA_to_BGR;
+        case combo(YA, BGRA)   : return &YA_to_BGRA;
         case combo(RGB, Y)     : return &RGB_to_Y;
         case combo(RGB, YA)    : return &RGB_to_YA;
         case combo(RGB, RGBA)  : return &RGB_to_RGBA;
+        case combo(RGB, BGR)   : return &RGB_to_BGR;
+        case combo(RGB, BGRA)  : return &RGB_to_BGRA;
         case combo(RGBA, Y)    : return &RGBA_to_Y;
         case combo(RGBA, YA)   : return &RGBA_to_YA;
         case combo(RGBA, RGB)  : return &RGBA_to_RGB;
+        case combo(RGBA, BGR)  : return &RGBA_to_BGR;
+        case combo(RGBA, BGRA) : return &RGBA_to_BGRA;
         case combo(BGR, Y)     : return &BGR_to_Y;
         case combo(BGR, YA)    : return &BGR_to_YA;
         case combo(BGR, RGB)   : return &BGR_to_RGB;
@@ -139,11 +147,13 @@ package void Y_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     }
 }
 
+package alias Y_to_BGR = Y_to_RGB;
 package void Y_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=1, t+=3)
         tgt[t .. t+3] = src[k];
 }
 
+package alias Y_to_BGRA = Y_to_RGBA;
 package void Y_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=1, t+=4) {
         tgt[t .. t+3] = src[k];
@@ -156,11 +166,13 @@ package void YA_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
         tgt[t] = src[k];
 }
 
+package alias YA_to_BGR = YA_to_RGB;
 package void YA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=2, t+=3)
         tgt[t .. t+3] = src[k];
 }
 
+package alias YA_to_BGRA = YA_to_RGBA;
 package void YA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=2, t+=4) {
         tgt[t .. t+3] = src[k];
@@ -216,6 +228,7 @@ package void BGR_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     }
 }
 
+package alias RGB_to_BGR = BGR_to_RGB;
 package void BGR_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k;   k < src.length;   k+=3) {
         tgt[k  ] = src[k+2];
@@ -224,6 +237,7 @@ package void BGR_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
     }
 }
 
+package alias RGB_to_BGRA = BGR_to_RGBA;
 package void BGR_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=3, t+=4) {
         tgt[t  ] = src[k+2];
@@ -245,6 +259,7 @@ package void BGRA_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     }
 }
 
+package alias RGBA_to_BGR = BGRA_to_RGB;
 package void BGRA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=4, t+=3) {
         tgt[t  ] = src[k+2];
@@ -253,6 +268,7 @@ package void BGRA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
     }
 }
 
+package alias RGBA_to_BGRA = BGRA_to_RGBA;
 package void BGRA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=4, t+=4) {
         tgt[t  ] = src[k+2];
