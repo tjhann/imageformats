@@ -231,7 +231,7 @@ void write_tga(OutStream stream, long w, long h, in ubyte[] data, int tgt_chans 
     ec.h = cast(ushort) h;
     ec.src_chans = cast(int) src_chans;
     ec.tgt_chans = (tgt_chans) ? tgt_chans : ec.src_chans;
-    ec.rle = 0; // TODO
+    ec.rle = true;
     ec.data = data;
 
     write_tga(ec);
@@ -307,7 +307,75 @@ private void write_image_data(ref TGA_Encoder ec) {
     }
 
     // ----- RLE  -----
-    // TODO rle
+
+    immutable c = ec.tgt_chans;
+    ubyte[] px;
+    long max_packets_per_line = (tgt_linesize+127) / 128;
+    auto tgt_cmp = new ubyte[tgt_linesize + max_packets_per_line];  // compressed line
+    int rle_limit = (1 < c) ? 2 : 3;    // run len that is worth an RLE packet
+    foreach (_; 0 .. ec.h) {
+        convert(ec.data[si .. si + src_linesize], tgt_line);
+
+        long runlen = 0;
+        long rawlen = 0;
+        long raw_i = 0; // start of raw packet data in tgt_line
+        long cmp_i = 0;
+        long pixels_left = ec.w;
+        for (long i = c; pixels_left; i += c) {
+            runlen = 1;
+            px = tgt_line[i-c .. i];
+            while (i < tgt_line.length && tgt_line[i .. i+c] == px[0..$] && runlen < 128) {
+                ++runlen;
+                i += c;
+            }
+            pixels_left -= runlen;
+
+            if (runlen < rle_limit) {
+                // data goes to raw packet
+                rawlen += runlen;
+                runlen = 0;
+                if (128 <= rawlen) {     // full packet, need to store it
+                    long copysize = 128 * c;
+                    tgt_cmp[cmp_i++] = 0x7f; // raw packet header
+                    tgt_cmp[cmp_i .. cmp_i+copysize] = tgt_line[raw_i .. raw_i+copysize];
+                    cmp_i += copysize;
+                    raw_i += copysize;
+                    rawlen -= 128;
+                }
+            } else {
+                // RLE packet is worth it
+
+                // store raw packet first, if any
+                if (rawlen) {
+                    assert(rawlen < 128);
+                    long copysize = rawlen * c;
+                    tgt_cmp[cmp_i++] = cast(ubyte) (rawlen-1); // raw packet header
+                    tgt_cmp[cmp_i .. cmp_i+copysize] = tgt_line[raw_i .. raw_i+copysize];
+                    cmp_i += copysize;
+                    rawlen = 0;
+                }
+
+                // store RLE packet
+                tgt_cmp[cmp_i++] = cast(ubyte) (0x80 | (runlen-1)); // packet header
+                tgt_cmp[cmp_i .. cmp_i+c] = px[0..$];                   // packet data
+                cmp_i += c;
+                raw_i = i;
+                runlen = 0;
+            }
+        }   // for
+
+        if (rawlen) {   // last packet of the line
+            long copysize = rawlen * c;
+            tgt_cmp[cmp_i++] = cast(ubyte) (rawlen-1); // raw packet header
+            tgt_cmp[cmp_i .. cmp_i+copysize] = tgt_line[raw_i .. raw_i+copysize];
+            cmp_i += copysize;
+            raw_i += copysize;
+            rawlen = 0;
+        }
+
+        ec.stream.writeBlock(tgt_cmp[0 .. cmp_i]);
+        si -= src_linesize; // origin at bottom
+    }
 }
 
 private enum TGA_DataType : ubyte {
