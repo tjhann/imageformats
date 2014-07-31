@@ -376,7 +376,6 @@ private ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int
         tgt_cmp[cmp_i++] = cast(ubyte) (rawlen-1); // raw packet header
         tgt_cmp[cmp_i .. cmp_i+copysize] = line[raw_i .. raw_i+copysize];
         cmp_i += copysize;
-        raw_i += copysize;
         rawlen = 0;
     }
     return tgt_cmp[0 .. cmp_i];
