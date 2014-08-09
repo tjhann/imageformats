@@ -6,6 +6,7 @@ public import imageformats.common;
 
 import std.algorithm;   // min
 import std.bitmanip;      // bigEndianToNative()
+import std.stdio;       // File
 
 struct TGA_Header {
    ubyte id_length;
@@ -23,12 +24,12 @@ struct TGA_Header {
 }
 
 TGA_Header read_tga_header(in char[] filename) {
-    auto stream = new InStream(filename);
+    auto stream = File(filename.idup, "rb");
     scope(exit) stream.close();
     return read_tga_header(stream);
 }
 
-TGA_Header read_tga_header(InStream stream) {
+TGA_Header read_tga_header(File stream) {
     ubyte[18] tmp = void;
     stream.readExact(tmp, tmp.length);
 
@@ -52,13 +53,13 @@ TGA_Header read_tga_header(InStream stream) {
 ubyte[] read_tga(in char[] filename, out long w, out long h, out int chans, int req_chans = 0) {
     if (!filename.length)
         throw new ImageIOException("no filename");
-    auto stream = new InStream(filename);
+    auto stream = File(filename.idup, "rb");
     scope(exit) stream.close();
     return read_tga(stream, w, h, chans, req_chans);
 }
 
-ubyte[] read_tga(InStream stream, out long w, out long h, out int chans, int req_chans = 0) {
-    if (stream is null || req_chans < 0 || 4 < req_chans)
+ubyte[] read_tga(File stream, out long w, out long h, out int chans, int req_chans = 0) {
+    if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
     TGA_Header hdr = read_tga_header(stream);
@@ -131,7 +132,7 @@ ubyte[] read_tga(InStream stream, out long w, out long h, out int chans, int req
 }
 
 private struct TGA_Decoder {
-    InStream stream;
+    File stream;
     long w, h;
     bool origin_at_top;    // src
     int bytes_pp;
@@ -208,15 +209,16 @@ private ubyte[] decode_tga(ref TGA_Decoder dc) {
 void write_tga(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0) {
     if (!filename.length)
         throw new ImageIOException("no filename");
-    auto stream = new OutStream(filename);
-    scope(exit) stream.flush_and_close();
+    auto stream = File(filename.idup, "wb");
+    scope(exit) {
+        stream.flush();
+        stream.close();
+    }
     write_tga(stream, w, h, data, tgt_chans);
 }
 
 // NOTE: the caller should flush the stream
-void write_tga(OutStream stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
-    if (stream is null)
-        throw new ImageIOException("no stream");
+void write_tga(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
     if (w < 1 || h < 1 || ushort.max < w || ushort.max < h)
         throw new ImageIOException("invalid dimensions");
     ulong src_chans = data.length / w / h;
@@ -238,7 +240,7 @@ void write_tga(OutStream stream, long w, long h, in ubyte[] data, int tgt_chans 
 }
 
 private struct TGA_Encoder {
-    OutStream stream;
+    File stream;
     ushort w, h;
     int src_chans;
     int tgt_chans;
@@ -267,7 +269,7 @@ private void write_tga(ref TGA_Encoder ec) {
     hdr[14..16] = nativeToLittleEndian(ec.h);
     hdr[16] = cast(ubyte) (ec.tgt_chans * 8);     // bits per pixel
     hdr[17] = (has_alpha) ? 0x8 : 0x0;     // flags: attr_bits_pp = 8
-    ec.stream.writeBlock(hdr);
+    ec.stream.rawWrite(hdr);
 
     write_image_data(ec);
 
@@ -275,7 +277,7 @@ private void write_tga(ref TGA_Encoder ec) {
     ftr[0..4] = 0;   // extension area offset
     ftr[4..8] = 0;   // developer directory offset
     ftr[8..26] = ['T','R','U','E','V','I','S','I','O','N','-','X','F','I','L','E','.', 0];
-    ec.stream.writeBlock(ftr);
+    ec.stream.rawWrite(ftr);
 }
 
 private void write_image_data(ref TGA_Encoder ec) {
@@ -300,7 +302,7 @@ private void write_image_data(ref TGA_Encoder ec) {
     if (!ec.rle) {
         foreach (_; 0 .. ec.h) {
             convert(ec.data[si .. si + src_linesize], tgt_line);
-            ec.stream.writeBlock(tgt_line);
+            ec.stream.rawWrite(tgt_line);
             si -= src_linesize; // origin at bottom
         }
         return;
@@ -314,7 +316,7 @@ private void write_image_data(ref TGA_Encoder ec) {
     foreach (_; 0 .. ec.h) {
         convert(ec.data[si .. si + src_linesize], tgt_line);
         ubyte[] compressed_line = rle_compress(tgt_line, tgt_cmp, ec.w, bpp);
-        ec.stream.writeBlock(compressed_line);
+        ec.stream.rawWrite(compressed_line);
         si -= src_linesize; // origin at bottom
     }
 }
@@ -390,7 +392,7 @@ private enum TGA_DataType : ubyte {
     Gray_RLE      = 11,
 }
 
-private void read_tga_info(InStream stream, out long w, out long h, out int chans) {
+private void read_tga_info(File stream, out long w, out long h, out int chans) {
     TGA_Header hdr = read_tga_header(stream);
     w = hdr.width;
     h = hdr.height;

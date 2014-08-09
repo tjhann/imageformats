@@ -2,6 +2,7 @@
 // Boost Software License - Version 1.0 - August 17th, 2003
 module imageformats.common;
 
+import std.stdio;   // File
 import std.string;  // toLower, lastIndexOf
 
 enum ColFmt_Y = 1;
@@ -23,7 +24,7 @@ void read_image_info(in char[] filename, out long w, out long h, out int chans) 
         ImageIOFuncs funcs = register[ext];
         if (funcs.read_info is null)
             throw new ImageIOException("null function pointer");
-        auto stream = new InStream(filename);
+        auto stream = File(filename.idup, "rb");
         scope(exit) stream.close();
         funcs.read_info(stream, w, h, chans);
         return;
@@ -39,7 +40,7 @@ ubyte[] read_image(in char[] filename, out long w, out long h, out int chans, in
         ImageIOFuncs funcs = register[ext];
         if (funcs.read_image is null)
             throw new ImageIOException("null function pointer");
-        auto stream = new InStream(filename);
+        auto stream = File(filename.idup, "rb");
         scope(exit) stream.close();
         return funcs.read_image(stream, w, h, chans, req_chans);
     }
@@ -54,8 +55,11 @@ void write_image(in char[] filename, long w, long h, in ubyte[] data, int req_ch
         ImageIOFuncs funcs = register[ext];
         if (funcs.write_image is null)
             throw new ImageIOException("null function pointer");
-        auto stream = new OutStream(filename);
-        scope(exit) stream.flush_and_close();
+        auto stream = File(filename.idup, "wb");
+        scope(exit) {
+            stream.flush();
+            stream.close();
+        }
         funcs.write_image(stream, w, h, data, req_chans);
         return;
     }
@@ -72,11 +76,17 @@ private const(char)[] extract_extension_lowercase(in char[] filename) {
 // Register
 
 package struct ImageIOFuncs {
-    ubyte[] function(InStream s, out long w, out long h, out int c, int reqc) read_image;
-    void function(OutStream s, long w, long h, in ubyte[] data, int reqc) write_image;
-    void function(InStream s, out long w, out long h, out int c) read_info;
+    ubyte[] function(File s, out long w, out long h, out int c, int reqc) read_image;
+    void function(File s, long w, long h, in ubyte[] data, int reqc) write_image;
+    void function(File s, out long w, out long h, out int c) read_info;
 }
 package static ImageIOFuncs[string] register;
+
+package void readExact(File stream, ubyte[] buffer, size_t bytes) {
+    auto slice = stream.rawRead(buffer[0..bytes]);
+    if (slice.length != bytes)
+        throw new Exception("not enough data");
+}
 
 // --------------------------------------------------------------------------------
 // Conversions
@@ -275,66 +285,5 @@ package void BGRA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
         tgt[t+1] = src[k+1];
         tgt[t+2] = src[k  ];
         tgt[t+3] = src[k+3];
-    }
-}
-
-// --------------------------------------------------------------------------------
-// Temporary stream (std.stream is severely broken)
-
-import std.stdio;
-
-package class InStream {
-    private {
-        File f;
-    }
-
-    this(in char[] filename) {
-        this.f = File(filename.idup, "rb");
-    }
-
-    void readExact(ubyte[] block, size_t bytes) {
-        if (bytes == 0)
-            return;
-        if (block.length < bytes)
-            throw new ImageIOException("not enough space in buffer");
-        size_t rlen = f.rawRead(block[0..bytes]).length;
-        if (rlen != bytes)
-            throw new ImageIOException("not enough data");
-    }
-
-    size_t readBlock(ubyte[] block, size_t wanted = size_t.max) nothrow {
-        if (!block.length || wanted == 0)
-            return 0;
-
-        if (wanted > block.length)
-            wanted = block.length;
-
-        try {
-            return f.rawRead(block[0..wanted]).length;
-        } catch {
-            return 0;
-        }
-    }
-
-    void close() {
-        f.close();
-    }
-}
-
-package class OutStream {
-    private {
-        File f;
-    }
-
-    this(in char[] filename) {
-        this.f = File(filename.idup, "w");
-    }
-
-    void writeBlock(const(ubyte)[] block) {
-        f.rawWrite(block);
-    }
-
-    void flush_and_close() {
-        f.close();
     }
 }
