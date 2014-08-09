@@ -103,10 +103,8 @@ ubyte[] read_tga(File stream, out long w, out long h, out int chans, int req_cha
 
     int src_chans = hdr.bits_pp / 8;
 
-    if (hdr.id_length) {
-        auto shitbuf = new ubyte[hdr.id_length];    // FIXME
-        stream.readExact(shitbuf, hdr.id_length);   // FIXME
-    }
+    if (hdr.id_length)
+        stream.seek(hdr.id_length, SEEK_CUR);
 
     TGA_Decoder dc;
     dc.stream         = stream;
