@@ -8,6 +8,14 @@ import std.algorithm;   // min
 import std.bitmanip;      // bigEndianToNative()
 import std.stdio;       // File
 
+// ----------------------------------------------------------------------
+// Public API
+
+TGA_Header read_tga_header(in char[] filename);
+TGA_Header read_tga_header(File stream);
+ubyte[] read_tga(in char[] filename, out long w, out long h, out int chans, int req_chans = 0);
+ubyte[] read_tga(File stream, out long w, out long h, out int chans, int req_chans = 0);
+
 struct TGA_Header {
    ubyte id_length;
    ubyte palette_type;
@@ -22,6 +30,8 @@ struct TGA_Header {
    ubyte bits_pp;
    ubyte flags;
 }
+
+// ----------------------------------------------------------------------
 
 TGA_Header read_tga_header(in char[] filename) {
     auto stream = File(filename.idup, "rb");
@@ -129,7 +139,43 @@ ubyte[] read_tga(File stream, out long w, out long h, out int chans, int req_cha
     return decode_tga(dc);
 }
 
-private struct TGA_Decoder {
+void write_tga(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0) {
+    if (!filename.length)
+        throw new ImageIOException("no filename");
+    auto stream = File(filename.idup, "wb");
+    scope(exit) {
+        stream.flush();
+        stream.close();
+    }
+    write_tga(stream, w, h, data, tgt_chans);
+}
+
+// NOTE: the caller should flush the stream
+void write_tga(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
+    if (w < 1 || h < 1 || ushort.max < w || ushort.max < h)
+        throw new ImageIOException("invalid dimensions");
+    ulong src_chans = data.length / w / h;
+    if (src_chans < 1 || 4 < src_chans || tgt_chans < 0 || 4 < tgt_chans)
+        throw new ImageIOException("invalid channel count");
+    if (src_chans * w * h != data.length)
+        throw new ImageIOException("mismatching dimensions and length");
+
+    TGA_Encoder ec;
+    ec.stream = stream;
+    ec.w = cast(ushort) w;
+    ec.h = cast(ushort) h;
+    ec.src_chans = cast(int) src_chans;
+    ec.tgt_chans = (tgt_chans) ? tgt_chans : ec.src_chans;
+    ec.rle = true;
+    ec.data = data;
+
+    write_tga(ec);
+}
+
+// ----------------------------------------------------------------------
+private:
+
+struct TGA_Decoder {
     File stream;
     long w, h;
     bool origin_at_top;    // src
@@ -141,7 +187,7 @@ private struct TGA_Decoder {
     ubyte[] result;     // image data
 }
 
-private ubyte[] decode_tga(ref TGA_Decoder dc) {
+ubyte[] decode_tga(ref TGA_Decoder dc) {
     dc.result = new ubyte[dc.w * dc.h * dc.tgt_chans];
 
     immutable long tgt_linesize = dc.w * dc.tgt_chans;
@@ -202,42 +248,10 @@ private ubyte[] decode_tga(ref TGA_Decoder dc) {
     return dc.result;
 }
 
+// ----------------------------------------------------------------------
 // TGA encoder
 
-void write_tga(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0) {
-    if (!filename.length)
-        throw new ImageIOException("no filename");
-    auto stream = File(filename.idup, "wb");
-    scope(exit) {
-        stream.flush();
-        stream.close();
-    }
-    write_tga(stream, w, h, data, tgt_chans);
-}
-
-// NOTE: the caller should flush the stream
-void write_tga(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
-    if (w < 1 || h < 1 || ushort.max < w || ushort.max < h)
-        throw new ImageIOException("invalid dimensions");
-    ulong src_chans = data.length / w / h;
-    if (src_chans < 1 || 4 < src_chans || tgt_chans < 0 || 4 < tgt_chans)
-        throw new ImageIOException("invalid channel count");
-    if (src_chans * w * h != data.length)
-        throw new ImageIOException("mismatching dimensions and length");
-
-    TGA_Encoder ec;
-    ec.stream = stream;
-    ec.w = cast(ushort) w;
-    ec.h = cast(ushort) h;
-    ec.src_chans = cast(int) src_chans;
-    ec.tgt_chans = (tgt_chans) ? tgt_chans : ec.src_chans;
-    ec.rle = true;
-    ec.data = data;
-
-    write_tga(ec);
-}
-
-private struct TGA_Encoder {
+struct TGA_Encoder {
     File stream;
     ushort w, h;
     int src_chans;
@@ -246,7 +260,7 @@ private struct TGA_Encoder {
     const(ubyte)[] data;
 }
 
-private void write_tga(ref TGA_Encoder ec) {
+void write_tga(ref TGA_Encoder ec) {
     ubyte data_type;
     bool has_alpha = false;
     switch (ec.tgt_chans) with (TGA_DataType) {
@@ -278,7 +292,7 @@ private void write_tga(ref TGA_Encoder ec) {
     ec.stream.rawWrite(ftr);
 }
 
-private void write_image_data(ref TGA_Encoder ec) {
+void write_image_data(ref TGA_Encoder ec) {
     immutable long src_linesize = ec.w * ec.src_chans;
     immutable long tgt_linesize = ec.w * ec.tgt_chans;
     auto tgt_line = new ubyte[tgt_linesize];
@@ -319,8 +333,7 @@ private void write_image_data(ref TGA_Encoder ec) {
     }
 }
 
-pure
-private ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bpp) {
+ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bpp) pure {
     immutable int rle_limit = (1 < bpp) ? 2 : 3;    // run len that is worth an RLE packet
     long runlen = 0;
     long rawlen = 0;
@@ -381,7 +394,7 @@ private ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int
     return tgt_cmp[0 .. cmp_i];
 }
 
-private enum TGA_DataType : ubyte {
+enum TGA_DataType : ubyte {
     //Idx           = 1,
     TrueColor     = 2,
     Gray          = 3,
@@ -390,7 +403,7 @@ private enum TGA_DataType : ubyte {
     Gray_RLE      = 11,
 }
 
-private void read_tga_info(File stream, out long w, out long h, out int chans) {
+void read_tga_info(File stream, out long w, out long h, out int chans) {
     TGA_Header hdr = read_tga_header(stream);
     w = hdr.width;
     h = hdr.height;

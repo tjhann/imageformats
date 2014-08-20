@@ -11,8 +11,15 @@ import std.digest.crc;
 import std.stdio;       // File
 import std.zlib;
 
-static immutable ubyte[8] png_file_header =
-    [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+// ----------------------------------------------------------------------
+// Public API
+
+PNG_Header read_png_header(in char[] filename);
+PNG_Header read_png_header(File stream);
+ubyte[] read_png(in char[] filename, out long w, out long h, out int chans, int req_chans = 0);
+ubyte[] read_png(File stream, out long w, out long h, out int chans, int req_chans = 0);
+void write_png(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0);
+void write_png(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0);
 
 struct PNG_Header {
     int     width;
@@ -23,6 +30,8 @@ struct PNG_Header {
     ubyte   filter_method;
     ubyte   interlace_method;
 }
+
+// ----------------------------------------------------------------------
 
 PNG_Header read_png_header(in char[] filename) {
     auto stream = File(filename.idup, "rb");
@@ -100,7 +109,45 @@ ubyte[] read_png(File stream, out long w, out long h, out int chans, int req_cha
     return decode_png(dc);
 }
 
-private int channels(PNG_ColorType ct) pure nothrow {
+void write_png(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0) {
+    if (!filename.length)
+        throw new ImageIOException("no filename");
+    auto stream = File(filename.idup, "wb");
+    scope(exit) {
+        stream.flush();
+        stream.close();
+    }
+    write_png(stream, w, h, data, tgt_chans);
+}
+
+// NOTE: *caller* has to flush the stream
+void write_png(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
+    if (w < 1 || h < 1 || int.max < w || int.max < h)
+        throw new ImageIOException("invalid dimensions");
+    ulong src_chans = data.length / w / h;
+    if (src_chans < 1 || 4 < src_chans || tgt_chans < 0 || 4 < tgt_chans)
+        throw new ImageIOException("invalid channel count");
+    if (src_chans * w * h != data.length)
+        throw new ImageIOException("mismatching dimensions and length");
+
+    PNG_Encoder ec;
+    ec.stream = stream;
+    ec.w = cast(int) w;
+    ec.h = cast(int) h;
+    ec.src_chans = cast(int) src_chans;
+    ec.tgt_chans = (tgt_chans) ? tgt_chans : ec.src_chans;
+    ec.data = data;
+
+    write_png(ec);
+}
+
+// ----------------------------------------------------------------------
+private:
+
+static immutable ubyte[8] png_file_header =
+    [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+int channels(PNG_ColorType ct) pure nothrow {
     final switch (ct) with (PNG_ColorType) {
         case Y: return 1;
         case RGB, Idx: return 3;
@@ -109,7 +156,7 @@ private int channels(PNG_ColorType ct) pure nothrow {
     }
 }
 
-private PNG_ColorType color_type(int channels) pure nothrow {
+PNG_ColorType color_type(int channels) pure nothrow {
     switch (channels) {
         case 1: return PNG_ColorType.Y;
         case 2: return PNG_ColorType.YA;
@@ -119,7 +166,7 @@ private PNG_ColorType color_type(int channels) pure nothrow {
     }
 }
 
-private struct PNG_Decoder {
+struct PNG_Decoder {
     File stream;
     bool src_indexed;
     int src_chans;
@@ -135,7 +182,7 @@ private struct PNG_Decoder {
     ubyte[] result;     // image data
 }
 
-private ubyte[] decode_png(ref PNG_Decoder dc) {
+ubyte[] decode_png(ref PNG_Decoder dc) {
     dc.uc = new UnCompress(HeaderFormat.deflate);
     dc.read_buf = new ubyte[4096];
 
@@ -206,7 +253,7 @@ private ubyte[] decode_png(ref PNG_Decoder dc) {
     return dc.result;
 }
 
-private enum PNG_ColorType : ubyte {
+enum PNG_ColorType : ubyte {
     Y    = 0,
     RGB  = 2,
     Idx  = 3,
@@ -214,7 +261,7 @@ private enum PNG_ColorType : ubyte {
     RGBA = 6,
 }
 
-private enum PNG_FilterType : ubyte {
+enum PNG_FilterType : ubyte {
     None    = 0,
     Sub     = 1,
     Up      = 2,
@@ -222,7 +269,7 @@ private enum PNG_FilterType : ubyte {
     Paeth   = 4,
 }
 
-private void read_IDAT_stream(ref PNG_Decoder dc, int len) {
+void read_IDAT_stream(ref PNG_Decoder dc, int len) {
     dc.crc.put(dc.chunkmeta[8..12]);  // type
 
     immutable int filter_step = dc.src_chans; // pixel-wise step, in bytes
@@ -261,7 +308,7 @@ private void read_IDAT_stream(ref PNG_Decoder dc, int len) {
     }
 }
 
-private void uncompress_line(ref PNG_Decoder dc, ref int length, ref bool metaready, ubyte[] dst) {
+void uncompress_line(ref PNG_Decoder dc, ref int length, ref bool metaready, ubyte[] dst) {
     size_t readysize = min(dst.length, dc.uc_buf.length);
     dst[0 .. readysize] = dc.uc_buf[0 .. readysize];
     dc.uc_buf = dc.uc_buf[readysize .. $];
@@ -310,7 +357,7 @@ private void uncompress_line(ref PNG_Decoder dc, ref int length, ref bool metare
     }
 }
 
-private void recon(ubyte[] cline, in ubyte[] pline, ubyte ftype, int fstep) pure {
+void recon(ubyte[] cline, in ubyte[] pline, ubyte ftype, int fstep) pure {
     switch (ftype) with (PNG_FilterType) {
         case None:
             break;
@@ -340,7 +387,7 @@ private void recon(ubyte[] cline, in ubyte[] pline, ubyte ftype, int fstep) pure
     }
 }
 
-private ubyte paeth(ubyte a, ubyte b, ubyte c) pure nothrow {
+ubyte paeth(ubyte a, ubyte b, ubyte c) pure nothrow {
     int pc = cast(int) c;
     int pa = cast(int) b - pc;
     int pb = cast(int) a - pc;
@@ -357,41 +404,10 @@ private ubyte paeth(ubyte a, ubyte b, ubyte c) pure nothrow {
     return c;
 }
 
+// ----------------------------------------------------------------------
 // PNG encoder
 
-void write_png(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0) {
-    if (!filename.length)
-        throw new ImageIOException("no filename");
-    auto stream = File(filename.idup, "wb");
-    scope(exit) {
-        stream.flush();
-        stream.close();
-    }
-    write_png(stream, w, h, data, tgt_chans);
-}
-
-// NOTE: *caller* has to flush the stream
-void write_png(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
-    if (w < 1 || h < 1 || int.max < w || int.max < h)
-        throw new ImageIOException("invalid dimensions");
-    ulong src_chans = data.length / w / h;
-    if (src_chans < 1 || 4 < src_chans || tgt_chans < 0 || 4 < tgt_chans)
-        throw new ImageIOException("invalid channel count");
-    if (src_chans * w * h != data.length)
-        throw new ImageIOException("mismatching dimensions and length");
-
-    PNG_Encoder ec;
-    ec.stream = stream;
-    ec.w = cast(int) w;
-    ec.h = cast(int) h;
-    ec.src_chans = cast(int) src_chans;
-    ec.tgt_chans = (tgt_chans) ? tgt_chans : ec.src_chans;
-    ec.data = data;
-
-    write_png(ec);
-}
-
-private struct PNG_Encoder {
+struct PNG_Encoder {
     File stream;
     int w, h;
     int src_chans;
@@ -405,7 +421,7 @@ private struct PNG_Encoder {
     ubyte[] data_buf;   // slice of chunk_buf, for just chunk data
 }
 
-private void write_png(ref PNG_Encoder ec) {
+void write_png(ref PNG_Encoder ec) {
     ubyte[33] hdr = void;
     hdr[ 0 ..  8] = png_file_header;
     hdr[ 8 .. 16] = [0x0, 0x0, 0x0, 0xd, 'I','H','D','R'];
@@ -426,7 +442,7 @@ private void write_png(ref PNG_Encoder ec) {
     ec.stream.rawWrite(iend);
 }
 
-private void write_IDATs(ref PNG_Encoder ec) {
+void write_IDATs(ref PNG_Encoder ec) {
     static immutable ubyte[4] IDAT_type = ['I','D','A','T'];
     long max_idatlen = 4 * 4096;
     ec.writelen = 0;
@@ -476,7 +492,7 @@ private void write_IDATs(ref PNG_Encoder ec) {
         ec.write_IDAT_chunk();
 }
 
-private void write_to_IDAT_stream(ref PNG_Encoder ec, in void[] _compressed) {
+void write_to_IDAT_stream(ref PNG_Encoder ec, in void[] _compressed) {
     ubyte[] compressed = cast(ubyte[]) _compressed;
     while (compressed.length) {
         long space_left = ec.data_buf.length - ec.writelen;
@@ -491,7 +507,7 @@ private void write_to_IDAT_stream(ref PNG_Encoder ec, in void[] _compressed) {
 }
 
 // chunk: len type data crc, type is already in buf
-private void write_IDAT_chunk(ref PNG_Encoder ec) {
+void write_IDAT_chunk(ref PNG_Encoder ec) {
     ec.chunk_buf[0 .. 4] = nativeToBigEndian!uint(ec.writelen);
     ec.crc.put(ec.chunk_buf[4 .. 8 + ec.writelen]);   // crc of type and data
     ec.chunk_buf[8 + ec.writelen .. 8 + ec.writelen + 4] = ec.crc.finish().reverse;
@@ -499,7 +515,7 @@ private void write_IDAT_chunk(ref PNG_Encoder ec) {
     ec.writelen = 0;
 }
 
-private void read_png_info(File stream, out long w, out long h, out int chans) {
+void read_png_info(File stream, out long w, out long h, out int chans) {
     PNG_Header hdr = read_png_header(stream);
     w = hdr.width;
     h = hdr.height;
