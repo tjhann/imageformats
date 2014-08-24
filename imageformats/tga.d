@@ -15,6 +15,8 @@ TGA_Header read_tga_header(in char[] filename);
 TGA_Header read_tga_header(File stream);
 ubyte[] read_tga(in char[] filename, out long w, out long h, out int chans, int req_chans = 0);
 ubyte[] read_tga(File stream, out long w, out long h, out int chans, int req_chans = 0);
+void write_tga(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0);
+void write_tga(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0);
 
 struct TGA_Header {
    ubyte id_length;
