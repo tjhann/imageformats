@@ -519,7 +519,7 @@ void read_png_info(File stream, out long w, out long h, out int chans) {
     PNG_Header hdr = read_png_header(stream);
     w = hdr.width;
     h = hdr.height;
-    chans = 0;  // TODO
+    chans = channels(cast(PNG_ColorType) hdr.color_type);
 }
 
 static this() {

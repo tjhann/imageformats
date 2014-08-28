@@ -17,6 +17,7 @@ class ImageIOException : Exception {
    }
 }
 
+// chans is set to zero if num of channels is unknown
 void read_image_info(in char[] filename, out long w, out long h, out int chans) {
     const(char)[] ext = extract_extension_lowercase(filename);
 

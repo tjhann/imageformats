@@ -397,10 +397,10 @@ ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bpp) pu
 }
 
 enum TGA_DataType : ubyte {
-    //Idx           = 1,
+    Idx           = 1,
     TrueColor     = 2,
     Gray          = 3,
-    //Idx_RLE       = 9,
+    Idx_RLE       = 9,
     TrueColor_RLE = 10,
     Gray_RLE      = 11,
 }
@@ -409,7 +409,25 @@ void read_tga_info(File stream, out long w, out long h, out int chans) {
     TGA_Header hdr = read_tga_header(stream);
     w = hdr.width;
     h = hdr.height;
-    chans = 0;  // TODO
+
+    // TGA is awkward...
+    auto dt = hdr.data_type;
+    if ((dt == TGA_DataType.TrueColor     || dt == TGA_DataType.Gray ||
+         dt == TGA_DataType.TrueColor_RLE || dt == TGA_DataType.Gray_RLE)
+         && (hdr.bits_pp % 8) == 0)
+    {
+        chans = hdr.bits_pp / 8;
+        return;
+    } else if (dt == TGA_DataType.Idx || dt == TGA_DataType.Idx_RLE) {
+        switch (hdr.palette_bits) {
+            case 15: chans = 3; return;
+            case 16: chans = 3; return; // one bit could be for some "interrupt control"
+            case 24: chans = 3; return;
+            case 32: chans = 4; return;
+            default:
+        }
+    }
+    chans = 0;  // unknown
 }
 
 static this() {
