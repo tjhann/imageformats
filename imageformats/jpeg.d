@@ -519,9 +519,9 @@ ubyte[] decode_jpeg(ref JPEG_Decoder dc) {
 
     immutable conversion = dc.num_comps * 10 + dc.tgt_chans;
     switch (conversion) {
-        case 30 + 4: return dc.reconstruct_image_rgba();
-        case 30 + 3: return dc.reconstruct_image_rgb();
-        case 30 + 2, 10 + 2:
+        case 34: return dc.reconstruct_image_rgba();
+        case 33: return dc.reconstruct_image_rgb();
+        case 32, 12:
             auto comp = &dc.comps[0];
             auto result = new ubyte[dc.width * dc.height * 2];
             if (comp.sfx == dc.hmax && comp.sfy == dc.vmax) {
@@ -539,7 +539,7 @@ ubyte[] decode_jpeg(ref JPEG_Decoder dc) {
                 dc.upsample_gray_add_alpha(result);
                 return result;
             }
-        case 30 + 1, 10 + 1:
+        case 31, 11:
             auto comp = &dc.comps[0];
             if (comp.sfx == dc.hmax && comp.sfy == dc.vmax) {
                 if (comp.data.length == dc.width * dc.height)
@@ -558,7 +558,7 @@ ubyte[] decode_jpeg(ref JPEG_Decoder dc) {
                 dc.upsample_gray(result);
                 return result;
             }
-        case 10 + 4:
+        case 14:
             auto result = new ubyte[dc.width * dc.height * 4];
             long di;
             foreach (j; 0 .. dc.height) {
@@ -570,7 +570,7 @@ ubyte[] decode_jpeg(ref JPEG_Decoder dc) {
                 }
             }
             return result;
-        case 10 + 3:
+        case 13:
             auto result = new ubyte[dc.width * dc.height * 3];
             long di;
             foreach (j; 0 .. dc.height) {
