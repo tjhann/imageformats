@@ -92,7 +92,8 @@ ubyte[] read_png(File stream, out long w, out long h, out int chans, int req_cha
            hdr.color_type == PNG_ColorType.YA   ||
            hdr.color_type == PNG_ColorType.RGBA) )
         throw new ImageIOException("color type not supported");
-    if (hdr.compression_method != 0 || hdr.filter_method != 0 || hdr.interlace_method != 0)
+    if (hdr.compression_method != 0 || hdr.filter_method != 0 ||
+        (hdr.interlace_method != 0 && hdr.interlace_method != 1))
         throw new ImageIOException("not supported");
 
     PNG_Decoder dc;
@@ -100,6 +101,7 @@ ubyte[] read_png(File stream, out long w, out long h, out int chans, int req_cha
     dc.src_indexed = (hdr.color_type == PNG_ColorType.Idx);
     dc.src_chans = channels(cast(PNG_ColorType) hdr.color_type);
     dc.tgt_chans = (req_chans == 0) ? dc.src_chans : req_chans;
+    dc.ilace = hdr.interlace_method;
     dc.w = hdr.width;
     dc.h = hdr.height;
 
@@ -172,6 +174,7 @@ struct PNG_Decoder {
     int src_chans;
     int tgt_chans;
     long w, h;
+    ubyte ilace;
 
     UnCompress uc;
     CRC32 crc;
@@ -269,36 +272,92 @@ enum PNG_FilterType : ubyte {
     Paeth   = 4,
 }
 
+enum InterlaceMethod {
+    None = 0, Adam7 = 1
+}
+
 void read_IDAT_stream(ref PNG_Decoder dc, int len) {
     dc.crc.put(dc.chunkmeta[8..12]);  // type
+    bool metaready = false;     // chunk len, type, crc
 
     immutable int filter_step = dc.src_chans; // pixel-wise step, in bytes
-    immutable long src_sl_size = dc.w * dc.src_chans;
     immutable long tgt_sl_size = dc.w * dc.tgt_chans;
-
-    auto cline = new ubyte[src_sl_size+1];   // current line + filter byte
-    auto pline = new ubyte[src_sl_size+1];   // previous line, inited to 0
-    debug(DebugPNG) assert(pline[0] == 0);
 
     dc.result = new ubyte[dc.w * dc.h * dc.tgt_chans];
 
     void function(in ubyte[] src_line, ubyte[] tgt_line) convert;
     convert = get_converter(dc.src_chans, dc.tgt_chans);
 
-    bool metaready = false;     // chunk len, type, crc
+    if (dc.ilace == InterlaceMethod.None) {
+        immutable long src_sl_size = dc.w * dc.src_chans;
+        auto cline = new ubyte[src_sl_size+1];   // current line + filter byte
+        auto pline = new ubyte[src_sl_size+1];   // previous line, inited to 0
+        debug(DebugPNG) assert(pline[0] == 0);
 
-    long tgt_si = 0;    // scanline index in target buffer
-    foreach (j; 0 .. dc.h) {
-        uncompress_line(dc, len, metaready, cline);
-        ubyte filter_type = cline[0];
+        long tgt_si = 0;    // scanline index in target buffer
+        foreach (j; 0 .. dc.h) {
+            uncompress_line(dc, len, metaready, cline);
+            ubyte filter_type = cline[0];
 
-        recon(cline[1..$], pline[1..$], filter_type, filter_step);
-        convert(cline[1 .. $], dc.result[tgt_si .. tgt_si + tgt_sl_size]);
-        tgt_si += tgt_sl_size;
+            recon(cline[1..$], pline[1..$], filter_type, filter_step);
+            convert(cline[1 .. $], dc.result[tgt_si .. tgt_si + tgt_sl_size]);
+            tgt_si += tgt_sl_size;
 
-        ubyte[] _swap = pline;
-        pline = cline;
-        cline = _swap;
+            ubyte[] _swap = pline;
+            pline = cline;
+            cline = _swap;
+        }
+    } else {
+        // Adam7 interlacing
+
+        immutable long[7] redw = [
+            (dc.w + 7) / 8,
+            (dc.w + 3) / 8,
+            (dc.w + 3) / 4,
+            (dc.w + 1) / 4,
+            (dc.w + 1) / 2,
+            (dc.w + 0) / 2,
+            (dc.w + 0) / 1,
+        ];
+        immutable long[7] redh = [
+            (dc.h + 7) / 8,
+            (dc.h + 7) / 8,
+            (dc.h + 3) / 8,
+            (dc.h + 3) / 4,
+            (dc.h + 1) / 4,
+            (dc.h + 1) / 2,
+            (dc.h + 0) / 2,
+        ];
+
+        const long max_scanline_size = dc.w * dc.src_chans;
+        const linebuf0 = new ubyte[max_scanline_size+1]; // +1 for filter type byte
+        const linebuf1 = new ubyte[max_scanline_size+1]; // +1 for filter type byte
+        auto redlinebuf = new ubyte[dc.w * dc.tgt_chans];
+
+        foreach (pass; 0 .. 7) {
+            const A7_Catapult tgt_px = a7_catapults[pass];   // target pixel
+            const long src_sl_size = redw[pass] * dc.src_chans;
+            auto cline = cast(ubyte[]) linebuf0[0 .. src_sl_size+1];
+            auto pline = cast(ubyte[]) linebuf1[0 .. src_sl_size+1];
+
+            foreach (j; 0 .. redh[pass]) {
+                uncompress_line(dc, len, metaready, cline);
+                ubyte filter_type = cline[0];
+
+                recon(cline[1..$], pline[1..$], filter_type, filter_step);
+                convert(cline[1 .. $], redlinebuf[0 .. redw[pass]*dc.tgt_chans]);
+
+                for (int i, redi; i < redw[pass]; ++i, redi += dc.tgt_chans) {
+                    long tgt = tgt_px(i, j, dc.w) * dc.tgt_chans;
+                    dc.result[tgt .. tgt + dc.tgt_chans] =
+                        redlinebuf[redi .. redi + dc.tgt_chans];
+                }
+
+                ubyte[] _swap = pline;
+                pline = cline;
+                cline = _swap;
+            }
+        }
     }
 
     if (!metaready) {
@@ -306,6 +365,27 @@ void read_IDAT_stream(ref PNG_Decoder dc, int len) {
         if (dc.crc.finish.reverse != dc.chunkmeta[0..4])
             throw new ImageIOException("corrupt chunk");
     }
+}
+
+alias A7_Catapult = long function(long redx, long redy, long dstw);
+immutable A7_Catapult[7] a7_catapults = [
+    &a7_red1_to_dst,
+    &a7_red2_to_dst,
+    &a7_red3_to_dst,
+    &a7_red4_to_dst,
+    &a7_red5_to_dst,
+    &a7_red6_to_dst,
+    &a7_red7_to_dst,
+];
+
+pure nothrow {
+  long a7_red1_to_dst(long redx, long redy, long dstw) { return redy*8*dstw + redx*8;     }
+  long a7_red2_to_dst(long redx, long redy, long dstw) { return redy*8*dstw + redx*8+4;   }
+  long a7_red3_to_dst(long redx, long redy, long dstw) { return (redy*8+4)*dstw + redx*4; }
+  long a7_red4_to_dst(long redx, long redy, long dstw) { return redy*4*dstw + redx*4+2;   }
+  long a7_red5_to_dst(long redx, long redy, long dstw) { return (redy*4+2)*dstw + redx*2; }
+  long a7_red6_to_dst(long redx, long redy, long dstw) { return redy*2*dstw + redx*2+1;   }
+  long a7_red7_to_dst(long redx, long redy, long dstw) { return (redy*2+1)*dstw + redx;   }
 }
 
 void uncompress_line(ref PNG_Decoder dc, ref int length, ref bool metaready, ubyte[] dst) {
