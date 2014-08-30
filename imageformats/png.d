@@ -469,7 +469,6 @@ void write_IDATs(ref PNG_Encoder ec) {
         convert(ec.data[si .. si+src_line_size], cline[1..$]);
         si += src_line_size;
 
-        // filter with paeth TODO clean this up
         foreach (i; 1 .. filter_step+1)
             filtered_line[i] = cast(ubyte) (cline[i] - paeth(0, pline[i], 0));
         foreach (i; filter_step+1 .. cline.length)
