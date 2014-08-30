@@ -5,10 +5,12 @@ module imageformats.common;
 import std.stdio;   // File
 import std.string;  // toLower, lastIndexOf
 
-enum ColFmt_Y = 1;
-enum ColFmt_YA = 2;
-enum ColFmt_RGB = 3;
-enum ColFmt_RGBA = 4;
+enum ColFmt {
+    Y = 1,
+    YA = 2,
+    RGB = 3,
+    RGBA = 4,
+}
 
 class ImageIOException : Exception {
    @safe pure const
@@ -92,7 +94,7 @@ package void readExact(File stream, ubyte[] buffer, size_t bytes) {
 // --------------------------------------------------------------------------------
 // Conversions
 
-package enum ColFmt : int {
+package enum _ColFmt : int {
     Unknown = 0,
     Y = 1,
     YA,
@@ -106,7 +108,7 @@ package pure
 void function(in ubyte[] src, ubyte[] tgt) get_converter(int src_chans, int tgt_chans) {
     if (src_chans == tgt_chans)
         return &copy_line;
-    switch (combo(src_chans, tgt_chans)) with (ColFmt) {
+    switch (combo(src_chans, tgt_chans)) with (_ColFmt) {
         case combo(Y, YA)      : return &Y_to_YA;
         case combo(Y, RGB)     : return &Y_to_RGB;
         case combo(Y, RGBA)    : return &Y_to_RGBA;

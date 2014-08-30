@@ -128,10 +128,10 @@ ubyte[] read_tga(File stream, out long w, out long h, out int chans, int req_cha
     dc.tgt_chans      = (req_chans == 0) ? src_chans : req_chans;
 
     switch (dc.bytes_pp) {
-        case 1: dc.src_fmt = ColFmt.Y; break;
-        case 2: dc.src_fmt = ColFmt.YA; break;
-        case 3: dc.src_fmt = ColFmt.BGR; break;
-        case 4: dc.src_fmt = ColFmt.BGRA; break;
+        case 1: dc.src_fmt = _ColFmt.Y; break;
+        case 2: dc.src_fmt = _ColFmt.YA; break;
+        case 3: dc.src_fmt = _ColFmt.BGR; break;
+        case 4: dc.src_fmt = _ColFmt.BGRA; break;
         default: throw new ImageIOException("TGA: format not supported");
     }
 
@@ -183,7 +183,7 @@ struct TGA_Decoder {
     bool origin_at_top;    // src
     int bytes_pp;
     bool rle;   // run length comressed
-    ColFmt src_fmt;
+    _ColFmt src_fmt;
     int tgt_chans;
 
     ubyte[] result;     // image data
@@ -301,12 +301,12 @@ void write_image_data(ref TGA_Encoder ec) {
 
     long si = (ec.h-1) * src_linesize;     // origin at bottom
 
-    ColFmt tgt_fmt;
+    _ColFmt tgt_fmt;
     switch (ec.tgt_chans) {
-        case 1: tgt_fmt = ColFmt.Y; break;
-        case 2: tgt_fmt = ColFmt.YA; break;
-        case 3: tgt_fmt = ColFmt.BGR; break;
-        case 4: tgt_fmt = ColFmt.BGRA; break;
+        case 1: tgt_fmt = _ColFmt.Y; break;
+        case 2: tgt_fmt = _ColFmt.YA; break;
+        case 3: tgt_fmt = _ColFmt.BGR; break;
+        case 4: tgt_fmt = _ColFmt.BGRA; break;
         default: throw new ImageIOException("TGA: format not supported");
     }
 
