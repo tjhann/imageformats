@@ -9,7 +9,7 @@
 | tga    | color & monochrome | color & monochrome                |
 | jpeg   | baseline           | nope                              |
 
-**It's trivial:**
+**Let me show you:**
 ```D
 import std.stdio;   // File
 // import all formats:
