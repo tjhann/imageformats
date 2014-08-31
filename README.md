@@ -36,11 +36,13 @@ void main() {
 
     // there are also format specific functions
     PNG_Header hdr = read_png_header("peruna.png"); // get detailed info
-    ubyte[] data6 = read_png("peruna.png", w, h, chans);
-    write_tga("peruna.tga", w, h, data6);
+    ubyte[] data3 = read_png("peruna.png", w, h, chans);
+    write_tga("peruna.tga", w, h, data3);
 
     // can also pass a File to all the non-generic functions
     auto f = File("peruna.tga", "wb");
-    write_png(f, w, h, data6);
+    scope(exit) f.close();
+    write_png(f, w, h, data3);
+    f.flush();
 }
 ```
