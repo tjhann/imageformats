@@ -295,12 +295,6 @@ void write_tga(ref TGA_Encoder ec) {
 }
 
 void write_image_data(ref TGA_Encoder ec) {
-    immutable long src_linesize = ec.w * ec.src_chans;
-    immutable long tgt_linesize = ec.w * ec.tgt_chans;
-    auto tgt_line = new ubyte[tgt_linesize];
-
-    long si = (ec.h-1) * src_linesize;     // origin at bottom
-
     _ColFmt tgt_fmt;
     switch (ec.tgt_chans) {
         case 1: tgt_fmt = _ColFmt.Y; break;
@@ -312,6 +306,12 @@ void write_image_data(ref TGA_Encoder ec) {
 
     void function(in ubyte[] src_line, ubyte[] tgt_line) convert;
     convert = get_converter(ec.src_chans, tgt_fmt);
+
+    immutable long src_linesize = ec.w * ec.src_chans;
+    immutable long tgt_linesize = ec.w * ec.tgt_chans;
+    auto tgt_line = new ubyte[tgt_linesize];
+
+    long si = (ec.h-1) * src_linesize;     // origin at bottom
 
     if (!ec.rle) {
         foreach (_; 0 .. ec.h) {
