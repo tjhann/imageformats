@@ -301,7 +301,7 @@ void write_image_data(ref TGA_Encoder ec) {
         case 2: tgt_fmt = _ColFmt.YA; break;
         case 3: tgt_fmt = _ColFmt.BGR; break;
         case 4: tgt_fmt = _ColFmt.BGRA; break;
-        default: throw new ImageIOException("TGA: format not supported");
+        default: throw new ImageIOException("internal error");
     }
 
     void function(in ubyte[] src_line, ubyte[] tgt_line) convert;
