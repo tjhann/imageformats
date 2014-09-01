@@ -43,6 +43,5 @@ void main() {
     auto f = File("peruna.tga", "wb");
     scope(exit) f.close();
     write_png(f, w, h, data3);
-    f.flush();
 }
 ```

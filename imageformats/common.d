@@ -59,10 +59,7 @@ void write_image(in char[] filename, long w, long h, in ubyte[] data, int req_ch
         if (funcs.write_image is null)
             throw new ImageIOException("null function pointer");
         auto stream = File(filename.idup, "wb");
-        scope(exit) {
-            stream.flush();
-            stream.close();
-        }
+        scope(exit) stream.close();
         funcs.write_image(stream, w, h, data, req_chans);
         return;
     }

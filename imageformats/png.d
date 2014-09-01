@@ -115,14 +115,10 @@ void write_png(in char[] filename, long w, long h, in ubyte[] data, int tgt_chan
     if (!filename.length)
         throw new ImageIOException("no filename");
     auto stream = File(filename.idup, "wb");
-    scope(exit) {
-        stream.flush();
-        stream.close();
-    }
+    scope(exit) stream.close();
     write_png(stream, w, h, data, tgt_chans);
 }
 
-// NOTE: *caller* has to flush the stream
 void write_png(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
     if (w < 1 || h < 1 || int.max < w || int.max < h)
         throw new ImageIOException("invalid dimensions");
@@ -141,6 +137,7 @@ void write_png(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) 
     ec.data = data;
 
     write_png(ec);
+    stream.flush();
 }
 
 // ----------------------------------------------------------------------

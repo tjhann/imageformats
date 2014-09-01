@@ -145,14 +145,10 @@ void write_tga(in char[] filename, long w, long h, in ubyte[] data, int tgt_chan
     if (!filename.length)
         throw new ImageIOException("no filename");
     auto stream = File(filename.idup, "wb");
-    scope(exit) {
-        stream.flush();
-        stream.close();
-    }
+    scope(exit) stream.close();
     write_tga(stream, w, h, data, tgt_chans);
 }
 
-// NOTE: the caller should flush the stream
 void write_tga(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
     if (w < 1 || h < 1 || ushort.max < w || ushort.max < h)
         throw new ImageIOException("invalid dimensions");
@@ -172,6 +168,7 @@ void write_tga(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) 
     ec.data = data;
 
     write_tga(ec);
+    stream.flush();
 }
 
 // ----------------------------------------------------------------------
