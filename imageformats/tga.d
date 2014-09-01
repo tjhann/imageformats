@@ -182,12 +182,10 @@ struct TGA_Decoder {
     bool rle;   // run length comressed
     _ColFmt src_fmt;
     int tgt_chans;
-
-    ubyte[] result;     // image data
 }
 
 ubyte[] decode_tga(ref TGA_Decoder dc) {
-    dc.result = new ubyte[dc.w * dc.h * dc.tgt_chans];
+    auto result = new ubyte[dc.w * dc.h * dc.tgt_chans];
 
     immutable long tgt_linesize = dc.w * dc.tgt_chans;
     immutable long src_linesize = dc.w * dc.bytes_pp;
@@ -202,10 +200,10 @@ ubyte[] decode_tga(ref TGA_Decoder dc) {
     if (!dc.rle) {
         foreach (_j; 0 .. dc.h) {
             dc.stream.readExact(src_line, src_linesize);
-            convert(src_line, dc.result[ti .. ti + tgt_linesize]);
+            convert(src_line, result[ti .. ti + tgt_linesize]);
             ti += tgt_stride;
         }
-        return dc.result;
+        return result;
     }
 
     // ----- RLE  -----
@@ -240,11 +238,11 @@ ubyte[] decode_tga(ref TGA_Decoder dc) {
             }
         }
 
-        convert(src_line, dc.result[ti .. ti + tgt_linesize]);
+        convert(src_line, result[ti .. ti + tgt_linesize]);
         ti += tgt_stride;
     }
 
-    return dc.result;
+    return result;
 }
 
 // ----------------------------------------------------------------------
