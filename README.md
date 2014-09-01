@@ -6,7 +6,7 @@
 | Format | Decoder            | Encoder                           |
 | ---    | ---                | ---                               |
 | png    | 8-bit non-paletted | 8-bit non-interlaced non-paletted |
-| tga    | color & monochrome | color & monochrome                |
+| tga    | 8-bit non-paletted | 8-bit non-paletted                |
 | jpeg   | baseline           | nope                              |
 
 **Let me show you:**
