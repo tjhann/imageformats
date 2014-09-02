@@ -18,6 +18,19 @@ ubyte[] read_tga(File stream, out long w, out long h, out int chans, int req_cha
 void write_tga(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0);
 void write_tga(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0);
 
+/*
+    TGA supports premultiplied alpha so better be able to deal with it. The
+    type of the attribute channel is returned via at:
+        0 = no data
+        1 = undefined data, can be ignored
+        2 = undefined data, should be retained
+        3 = plain alpha
+        4 = premultiplied alpha
+    If the type can't be determined it is set to 3.
+*/
+ubyte[] read_tga(in char[] filename, out long w, out long h, out int chans, int req_chans, out int at);
+ubyte[] read_tga(File stream, out long w, out long h, out int chans, int reqc, out int at);
+
 struct TGA_Header {
    ubyte id_length;
    ubyte palette_type;
@@ -71,6 +84,19 @@ ubyte[] read_tga(in char[] filename, out long w, out long h, out int chans, int 
 }
 
 ubyte[] read_tga(File stream, out long w, out long h, out int chans, int req_chans = 0) {
+    int xx; return read_tga(stream, w, h, chans, req_chans, xx);
+}
+
+ubyte[] read_tga(in char[] filename, out long w, out long h, out int chans, int req_chans, out int at) {
+    if (!filename.length)
+        throw new ImageIOException("no filename");
+    auto stream = File(filename.idup, "rb");
+    scope(exit) stream.close();
+    return read_tga(stream, w, h, chans, req_chans, at);
+}
+
+ubyte[] read_tga(File stream, out long w, out long h, out int chans, int rc, out int at) {
+    alias req_chans = rc;
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
@@ -138,7 +164,27 @@ ubyte[] read_tga(File stream, out long w, out long h, out int chans, int req_cha
     w = dc.w;
     h = dc.h;
     chans = dc.tgt_chans;
-    return decode_tga(dc);
+    ubyte[] result = decode_tga(dc);
+
+    if (dc.src_fmt != _ColFmt.YA && dc.src_fmt != _ColFmt.BGRA) {
+        at = 0;
+        return result;
+    }
+
+    // fetch attribute type (plain/premultiplied/undefined alpha)
+    at = 3; // guess it's plain alpha if can't fetch it
+    ubyte[26] ftr = void;
+    try {
+        stream.seek(-26, SEEK_END);
+        stream.readExact(ftr, 26);
+        if (ftr[8..26] == footer_sig) {
+            uint extarea = littleEndianToNative!uint(ftr[0..4]);
+            stream.seek(extarea + 494, SEEK_SET);
+            stream.readExact(ftr, 1);
+            at = ftr[0];
+        }
+    } catch { }
+    return result;
 }
 
 void write_tga(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0) {
@@ -248,6 +294,9 @@ ubyte[] decode_tga(ref TGA_Decoder dc) {
 // ----------------------------------------------------------------------
 // TGA encoder
 
+immutable ubyte[18] footer_sig =
+    ['T','R','U','E','V','I','S','I','O','N','-','X','F','I','L','E','.', 0];
+
 struct TGA_Encoder {
     File stream;
     ushort w, h;
@@ -285,7 +334,7 @@ void write_tga(ref TGA_Encoder ec) {
     ubyte[26] ftr = void;
     ftr[0..4] = 0;   // extension area offset
     ftr[4..8] = 0;   // developer directory offset
-    ftr[8..26] = ['T','R','U','E','V','I','S','I','O','N','-','X','F','I','L','E','.', 0];
+    ftr[8..26] = footer_sig;
     ec.stream.rawWrite(ftr);
 }
 
