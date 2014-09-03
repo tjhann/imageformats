@@ -5,6 +5,20 @@ module imageformats.common;
 import std.stdio;   // File
 import std.string;  // toLower, lastIndexOf
 
+class ImageIOException : Exception {
+   @safe pure const
+   this(string msg, string file = __FILE__, size_t line = __LINE__) {
+       super(msg, file, line);
+   }
+}
+
+struct IF_Image {
+    long w, h;
+    ColFmt chans;
+    AlphaType alpha_type;
+    ubyte[] data;
+}
+
 enum ColFmt {
     Y = 1,
     YA = 2,
@@ -12,11 +26,11 @@ enum ColFmt {
     RGBA = 4,
 }
 
-class ImageIOException : Exception {
-   @safe pure const
-   this(string msg, string file = __FILE__, size_t line = __LINE__) {
-       super(msg, file, line);
-   }
+enum AlphaType {
+    NoData,
+    Plain,
+    Premul,
+    Undefined
 }
 
 // chans is set to zero if num of channels is unknown
@@ -36,7 +50,7 @@ void read_image_info(in char[] filename, out long w, out long h, out int chans) 
     throw new ImageIOException("unknown image extension/type");
 }
 
-ubyte[] read_image(in char[] filename, out long w, out long h, out int chans, int req_chans = 0) {
+IF_Image read_image(in char[] filename, int req_chans = 0) {
     const(char)[] ext = extract_extension_lowercase(filename);
 
     if (ext in register) {
@@ -45,7 +59,7 @@ ubyte[] read_image(in char[] filename, out long w, out long h, out int chans, in
             throw new ImageIOException("null function pointer");
         auto stream = File(filename.idup, "rb");
         scope(exit) stream.close();
-        return funcs.read_image(stream, w, h, chans, req_chans);
+        return funcs.read_image(stream, req_chans);
     }
 
     throw new ImageIOException("unknown image extension/type");
@@ -76,8 +90,8 @@ private const(char)[] extract_extension_lowercase(in char[] filename) {
 // Register
 
 package struct ImageIOFuncs {
-    ubyte[] function(File s, out long w, out long h, out int c, int reqc) read_image;
-    void function(File s, long w, long h, in ubyte[] data, int reqc) write_image;
+    IF_Image function(File s, int req_chans) read_image;
+    void function(File s, long w, long h, in ubyte[] data, int req_chans) write_image;
     void function(File s, out long w, out long h, out int c) read_info;
 }
 package static ImageIOFuncs[string] register;

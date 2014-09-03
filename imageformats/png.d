@@ -16,8 +16,8 @@ import std.zlib;
 
 PNG_Header read_png_header(in char[] filename);
 PNG_Header read_png_header(File stream);
-ubyte[] read_png(in char[] filename, out long w, out long h, out int chans, int req_chans = 0);
-ubyte[] read_png(File stream, out long w, out long h, out int chans, int req_chans = 0);
+IF_Image read_png(in char[] filename, int req_chans = 0);
+IF_Image read_png(File stream, int req_chans = 0);
 void write_png(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0);
 void write_png(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0);
 
@@ -60,23 +60,15 @@ PNG_Header read_png_header(File stream) {
     return header;
 }
 
-/*
-    Returns: by req_chans:
-        0 -> Keeps original format
-        1 -> Gray8
-        2 -> GrayAlpha8
-        3 -> RGB8
-        4 -> RGBA8
-*/
-ubyte[] read_png(in char[] filename, out long w, out long h, out int chans, int req_chans = 0) {
+IF_Image read_png(in char[] filename, int req_chans = 0) {
     if (!filename.length)
         throw new ImageIOException("no filename");
     auto stream = File(filename.idup, "rb");
     scope(exit) stream.close();
-    return read_png(stream, w, h, chans, req_chans);
+    return read_png(stream, req_chans);
 }
 
-ubyte[] read_png(File stream, out long w, out long h, out int chans, int req_chans = 0) {
+IF_Image read_png(File stream, int req_chans = 0) {
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
@@ -105,10 +97,15 @@ ubyte[] read_png(File stream, out long w, out long h, out int chans, int req_cha
     dc.w = hdr.width;
     dc.h = hdr.height;
 
-    w = dc.w;
-    h = dc.h;
-    chans = dc.tgt_chans;
-    return decode_png(dc);
+    IF_Image result;
+    result.w = dc.w;
+    result.h = dc.h;
+    result.chans = cast(ColFmt) dc.tgt_chans;
+    result.alpha_type = (result.chans == 2 || result.chans == 4)
+                      ? AlphaType.Plain
+                      : AlphaType.NoData;
+    result.data = decode_png(dc);
+    return result;
 }
 
 void write_png(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0) {

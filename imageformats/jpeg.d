@@ -26,8 +26,8 @@ public import imageformats.common;
 
 JPEG_Header read_jpeg_header(in char[] filename);
 JPEG_Header read_jpeg_header(File stream);
-ubyte[] read_jpeg(in char[] filename, out long w, out long h, out int chans, int req_chans = 0);
-ubyte[] read_jpeg(File stream, out long w, out long h, out int chans, int req_chans = 0);
+IF_Image read_jpeg(in char[] filename, int req_chans = 0);
+IF_Image read_jpeg(File stream, int req_chans = 0);
 
 struct JPEG_Header {    // JFIF
     ubyte version_major;
@@ -112,15 +112,15 @@ JPEG_Header read_jpeg_header(File stream) {
     assert(0);
 }
 
-ubyte[] read_jpeg(in char[] filename, out long w, out long h, out int chans, int req_chans = 0) {
+IF_Image read_jpeg(in char[] filename, int req_chans = 0) {
     if (!filename.length)
         throw new ImageIOException("no filename");
     auto stream = File(filename.idup, "rb");
     scope(exit) stream.close();
-    return read_jpeg(stream, w, h, chans, req_chans);
+    return read_jpeg(stream, req_chans);
 }
 
-ubyte[] read_jpeg(File stream, out long w, out long h, out int chans, int req_chans = 0) {
+IF_Image read_jpeg(File stream, int req_chans = 0) {
     if (!stream.isOpen || req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
@@ -155,10 +155,15 @@ ubyte[] read_jpeg(File stream, out long w, out long h, out int chans, int req_ch
 
     dc.tgt_chans = (req_chans == 0) ? dc.num_comps : req_chans;
 
-    w = dc.width;
-    h = dc.height;
-    chans = dc.tgt_chans;
-    return decode_jpeg(dc);
+    IF_Image result;
+    result.w = dc.width;
+    result.h = dc.height;
+    result.chans = cast(ColFmt) dc.tgt_chans;
+    result.alpha_type = (result.chans == 2 || result.chans == 4)
+                      ? AlphaType.Plain
+                      : AlphaType.NoData;
+    result.data = decode_jpeg(dc);
+    return result;
 }
 
 // ----------------------------------------------------------------------

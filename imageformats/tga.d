@@ -13,23 +13,10 @@ import std.stdio;       // File
 
 TGA_Header read_tga_header(in char[] filename);
 TGA_Header read_tga_header(File stream);
-ubyte[] read_tga(in char[] filename, out long w, out long h, out int chans, int req_chans = 0);
-ubyte[] read_tga(File stream, out long w, out long h, out int chans, int req_chans = 0);
+IF_Image read_tga(in char[] filename, int req_chans = 0);
+IF_Image read_tga(File stream, int req_chans = 0);
 void write_tga(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0);
 void write_tga(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0);
-
-/*
-    TGA supports premultiplied alpha so better be able to deal with it. The
-    type of the attribute channel is returned via at:
-        0 = no data
-        1 = undefined data, can be ignored
-        2 = undefined data, should be retained
-        3 = plain alpha
-        4 = premultiplied alpha
-    If the type can't be determined it is set to 3.
-*/
-ubyte[] read_tga(in char[] filename, out long w, out long h, out int chans, int req_chans, out int at);
-ubyte[] read_tga(File stream, out long w, out long h, out int chans, int reqc, out int at);
 
 struct TGA_Header {
    ubyte id_length;
@@ -75,28 +62,15 @@ TGA_Header read_tga_header(File stream) {
     return header;
 }
 
-ubyte[] read_tga(in char[] filename, out long w, out long h, out int chans, int req_chans = 0) {
+IF_Image read_tga(in char[] filename, int req_chans = 0) {
     if (!filename.length)
         throw new ImageIOException("no filename");
     auto stream = File(filename.idup, "rb");
     scope(exit) stream.close();
-    return read_tga(stream, w, h, chans, req_chans);
+    return read_tga(stream, req_chans);
 }
 
-ubyte[] read_tga(File stream, out long w, out long h, out int chans, int req_chans = 0) {
-    int xx; return read_tga(stream, w, h, chans, req_chans, xx);
-}
-
-ubyte[] read_tga(in char[] filename, out long w, out long h, out int chans, int req_chans, out int at) {
-    if (!filename.length)
-        throw new ImageIOException("no filename");
-    auto stream = File(filename.idup, "rb");
-    scope(exit) stream.close();
-    return read_tga(stream, w, h, chans, req_chans, at);
-}
-
-ubyte[] read_tga(File stream, out long w, out long h, out int chans, int rc, out int at) {
-    alias req_chans = rc;
+IF_Image read_tga(File stream, int req_chans = 0) {
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
@@ -161,18 +135,19 @@ ubyte[] read_tga(File stream, out long w, out long h, out int chans, int rc, out
         default: throw new ImageIOException("TGA: format not supported");
     }
 
-    w = dc.w;
-    h = dc.h;
-    chans = dc.tgt_chans;
-    ubyte[] result = decode_tga(dc);
+    IF_Image result;
+    result.w = dc.w;
+    result.h = dc.h;
+    result.chans = cast(ColFmt) dc.tgt_chans;
+    result.data = decode_tga(dc);
 
     if (dc.src_fmt != _ColFmt.YA && dc.src_fmt != _ColFmt.BGRA) {
-        at = 0;
+        result.alpha_type = AlphaType.NoData;
         return result;
     }
 
     // fetch attribute type (plain/premultiplied/undefined alpha)
-    at = 3; // guess it's plain alpha if can't fetch it
+    result.alpha_type = AlphaType.Plain; // guess it's plain alpha if can't fetch it
     ubyte[26] ftr = void;
     try {
         stream.seek(-26, SEEK_END);
@@ -181,7 +156,13 @@ ubyte[] read_tga(File stream, out long w, out long h, out int chans, int rc, out
             uint extarea = littleEndianToNative!uint(ftr[0..4]);
             stream.seek(extarea + 494, SEEK_SET);
             stream.readExact(ftr, 1);
-            at = ftr[0];
+            switch (ftr[0]) {
+                //case 0: result.alpha_type = AlphaType.NoData;
+                case 1, 2: result.alpha_type = AlphaType.Undefined; break;
+                case 3: result.alpha_type = AlphaType.Plain; break;
+                case 4: result.alpha_type = AlphaType.Premul; break;
+                default: result.alpha_type = AlphaType.Undefined; break;
+            }
         }
     } catch { }
     return result;
