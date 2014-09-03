@@ -140,7 +140,7 @@ void write_png(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) 
 // ----------------------------------------------------------------------
 private:
 
-static immutable ubyte[8] png_file_header =
+immutable ubyte[8] png_file_header =
     [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 int channels(PNG_ColorType ct) pure nothrow {
