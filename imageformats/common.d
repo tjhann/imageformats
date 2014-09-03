@@ -34,7 +34,7 @@ enum AlphaType {
 }
 
 // chans is set to zero if num of channels is unknown
-void read_image_info(in char[] filename, out long w, out long h, out int chans) {
+void read_image_info(in char[] filename, out int w, out int h, out int chans) {
     const(char)[] ext = extract_extension_lowercase(filename);
 
     if (ext in register) {
@@ -92,7 +92,7 @@ private const(char)[] extract_extension_lowercase(in char[] filename) {
 package struct ImageIOFuncs {
     IF_Image function(File s, int req_chans) read_image;
     void function(File s, long w, long h, in ubyte[] data, int req_chans) write_image;
-    void function(File s, out long w, out long h, out int c) read_info;
+    void function(File s, out int w, out int h, out int c) read_info;
 }
 package static ImageIOFuncs[string] register;
 

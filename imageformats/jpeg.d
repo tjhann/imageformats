@@ -1040,7 +1040,7 @@ pure ubyte stbi__clamp(int x) {
 // the above is adapted from stb_image
 // ------------------------------------------------------------
 
-void read_jpeg_info(File stream, out long w, out long h, out int chans) {
+void read_jpeg_info(File stream, out int w, out int h, out int chans) {
     JPEG_Header hdr = read_jpeg_header(stream);
     w = hdr.width;
     h = hdr.height;

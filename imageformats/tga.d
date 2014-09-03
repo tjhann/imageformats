@@ -430,7 +430,7 @@ enum TGA_DataType : ubyte {
     Gray_RLE      = 11,
 }
 
-void read_tga_info(File stream, out long w, out long h, out int chans) {
+void read_tga_info(File stream, out int w, out int h, out int chans) {
     TGA_Header hdr = read_tga_header(stream);
     w = hdr.width;
     h = hdr.height;

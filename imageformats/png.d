@@ -588,7 +588,7 @@ void write_IDAT_chunk(ref PNG_Encoder ec) {
     ec.writelen = 0;
 }
 
-void read_png_info(File stream, out long w, out long h, out int chans) {
+void read_png_info(File stream, out int w, out int h, out int chans) {
     PNG_Header hdr = read_png_header(stream);
     w = hdr.width;
     h = hdr.height;
