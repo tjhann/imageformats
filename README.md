@@ -19,29 +19,25 @@ import imageformats.png;
 import imageformats.tga;
 
 void main() {
-    long w, h;
-    int chans;
-
-    // w and h will be set to width and heigth
-    // chans will be set to number of channels in returned data
     // optional last argument defines conversion
-    ubyte[] data0 = read_image("peruna.png", w, h, chans);
-    ubyte[] data1 = read_image("peruna.png", w, h, chans, ColFmt.YA);
-    ubyte[] data2 = read_image("peruna.png", w, h, chans, ColFmt.RGB);
+    IF_Image a = read_image("peruna.png");
+    IF_Image b = read_image("peruna.png", ColFmt.YA);
+    IF_Image c = read_image("peruna.png", ColFmt.RGB);
 
-    write_image("peruna.tga", w, h, data0);
-    write_image("peruna.tga", w, h, data0, ColFmt.RGBA);
+    write_image("peruna.tga", a.w, a.h, a.data);
+    write_image("peruna.tga", a.w, a.h, a.data, ColFmt.RGBA);
 
+    int w, h, chans;
     read_image_info("peruna.png", w, h, chans);
 
     // there are also format specific functions
     PNG_Header hdr = read_png_header("peruna.png"); // get detailed info
-    ubyte[] data3 = read_png("peruna.png", w, h, chans);
-    write_tga("peruna.tga", w, h, data3);
+    IF_Image d = read_png("peruna.png");
+    write_tga("peruna.tga", d.w, d.h, d.data);
 
     // can also pass a File to all the non-generic functions
     auto f = File("peruna.tga", "wb");
     scope(exit) f.close();
-    write_png(f, w, h, data3);
+    write_png(f, d.w, d.h, d.data);
 }
 ```
