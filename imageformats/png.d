@@ -176,7 +176,6 @@ struct PNG_Decoder {
     ubyte[] read_buf;
     ubyte[] uc_buf;     // uncompressed
     ubyte[] palette;
-    ubyte[] result;     // image data
 }
 
 ubyte[] decode_png(ref PNG_Decoder dc) {
@@ -190,6 +189,7 @@ ubyte[] decode_png(ref PNG_Decoder dc) {
         IEND_parsed,
     }
 
+    ubyte[] result;
     auto stage = Stage.IHDR_parsed;
     dc.stream.readExact(dc.chunkmeta[4..$], 8);  // next chunk's len and type
 
@@ -204,7 +204,7 @@ ubyte[] decode_png(ref PNG_Decoder dc) {
                 if (! (stage == Stage.IHDR_parsed ||
                       (stage == Stage.PLTE_parsed && dc.src_indexed)) )
                     throw new ImageIOException("corrupt chunk stream");
-                read_IDAT_stream(dc, len);
+                result = read_IDAT_stream(dc, len);
                 stage = Stage.IDAT_parsed;
                 break;
             case "PLTE":
@@ -247,7 +247,7 @@ ubyte[] decode_png(ref PNG_Decoder dc) {
         }
     }
 
-    return dc.result;
+    return result;
 }
 
 enum PNG_ColorType : ubyte {
@@ -270,14 +270,14 @@ enum InterlaceMethod {
     None = 0, Adam7 = 1
 }
 
-void read_IDAT_stream(ref PNG_Decoder dc, int len) {
+ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
     dc.crc.put(dc.chunkmeta[8..12]);  // type
     bool metaready = false;     // chunk len, type, crc
 
     immutable int filter_step = dc.src_chans; // pixel-wise step, in bytes
     immutable long tgt_sl_size = dc.w * dc.tgt_chans;
 
-    dc.result = new ubyte[dc.w * dc.h * dc.tgt_chans];
+    ubyte[] result = new ubyte[dc.w * dc.h * dc.tgt_chans];
 
     void function(in ubyte[] src_line, ubyte[] tgt_line) convert;
     convert = get_converter(dc.src_chans, dc.tgt_chans);
@@ -294,7 +294,7 @@ void read_IDAT_stream(ref PNG_Decoder dc, int len) {
             ubyte filter_type = cline[0];
 
             recon(cline[1..$], pline[1..$], filter_type, filter_step);
-            convert(cline[1 .. $], dc.result[tgt_si .. tgt_si + tgt_sl_size]);
+            convert(cline[1 .. $], result[tgt_si .. tgt_si + tgt_sl_size]);
             tgt_si += tgt_sl_size;
 
             ubyte[] _swap = pline;
@@ -343,7 +343,7 @@ void read_IDAT_stream(ref PNG_Decoder dc, int len) {
 
                 for (int i, redi; i < redw[pass]; ++i, redi += dc.tgt_chans) {
                     long tgt = tgt_px(i, j, dc.w) * dc.tgt_chans;
-                    dc.result[tgt .. tgt + dc.tgt_chans] =
+                    result[tgt .. tgt + dc.tgt_chans] =
                         redlinebuf[redi .. redi + dc.tgt_chans];
                 }
 
@@ -359,6 +359,7 @@ void read_IDAT_stream(ref PNG_Decoder dc, int len) {
         if (dc.crc.finish.reverse != dc.chunkmeta[0..4])
             throw new ImageIOException("corrupt chunk");
     }
+    return result;
 }
 
 alias A7_Catapult = long function(long redx, long redy, long dstw);
