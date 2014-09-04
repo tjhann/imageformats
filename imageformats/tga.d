@@ -141,10 +141,8 @@ IF_Image read_tga(File stream, int req_chans = 0) {
     result.chans = cast(ColFmt) dc.tgt_chans;
     result.data = decode_tga(dc);
 
-    if (dc.src_fmt != _ColFmt.YA && dc.src_fmt != _ColFmt.BGRA) {
-        result.alpha_type = AlphaType.NoData;
+    if (dc.src_fmt != _ColFmt.YA && dc.src_fmt != _ColFmt.BGRA)
         return result;
-    }
 
     // fetch attribute type (plain/premultiplied/undefined alpha)
     result.alpha_type = AlphaType.Plain; // guess it's plain alpha if can't fetch it
@@ -157,11 +155,9 @@ IF_Image read_tga(File stream, int req_chans = 0) {
             stream.seek(extarea + 494, SEEK_SET);
             stream.readExact(ftr, 1);
             switch (ftr[0]) {
-                //case 0: result.alpha_type = AlphaType.NoData;
-                case 1, 2: result.alpha_type = AlphaType.Undefined; break;
                 case 3: result.alpha_type = AlphaType.Plain; break;
                 case 4: result.alpha_type = AlphaType.Premul; break;
-                default: result.alpha_type = AlphaType.Undefined; break;
+                default: result.alpha_type = AlphaType.Other; break;
             }
         }
     } catch { }

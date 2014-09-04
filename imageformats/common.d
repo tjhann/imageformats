@@ -27,10 +27,9 @@ enum ColFmt {
 }
 
 enum AlphaType {
-    NoData,
     Plain,
     Premul,
-    Undefined
+    Other
 }
 
 // chans is set to zero if num of channels is unknown
