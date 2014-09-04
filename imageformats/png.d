@@ -198,7 +198,7 @@ ubyte[] decode_png(ref PNG_Decoder dc) {
         if (len < 0)
             throw new ImageIOException("chunk too long");
 
-        // standard allows PLTE chunk for RGB and RGBA too but we don't
+        // standard allows PLTE chunk for non-indexed images too but we don't
         switch (cast(char[]) dc.chunkmeta[8..12]) {    // chunk type
             case "IDAT":
                 if (! (stage == Stage.IHDR_parsed ||
