@@ -1028,31 +1028,31 @@ void write_image_data(ref TGA_Encoder ec) {
 
     // ----- RLE  -----
 
-    immutable bpp = ec.tgt_chans;
+    immutable bytes_pp = ec.tgt_chans;
     immutable long max_packets_per_line = (tgt_linesize+127) / 128;
     auto tgt_cmp = new ubyte[tgt_linesize + max_packets_per_line];  // compressed line
     foreach (_; 0 .. ec.h) {
         convert(ec.data[si .. si + src_linesize], tgt_line);
-        ubyte[] compressed_line = rle_compress(tgt_line, tgt_cmp, ec.w, bpp);
+        ubyte[] compressed_line = rle_compress(tgt_line, tgt_cmp, ec.w, bytes_pp);
         ec.stream.rawWrite(compressed_line);
         si -= src_linesize; // origin at bottom
     }
 }
 
-ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bpp) pure {
-    immutable int rle_limit = (1 < bpp) ? 2 : 3;    // run len that is worth an RLE packet
+ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bytes_pp) pure {
+    immutable int rle_limit = (1 < bytes_pp) ? 2 : 3;  // run len worth an RLE packet
     long runlen = 0;
     long rawlen = 0;
     long raw_i = 0; // start of raw packet data in line
     long cmp_i = 0;
     long pixels_left = w;
     const (ubyte)[] px;
-    for (long i = bpp; pixels_left; i += bpp) {
+    for (long i = bytes_pp; pixels_left; i += bytes_pp) {
         runlen = 1;
-        px = line[i-bpp .. i];
-        while (i < line.length && line[i .. i+bpp] == px[0..$] && runlen < 128) {
+        px = line[i-bytes_pp .. i];
+        while (i < line.length && line[i .. i+bytes_pp] == px[0..$] && runlen < 128) {
             ++runlen;
-            i += bpp;
+            i += bytes_pp;
         }
         pixels_left -= runlen;
 
@@ -1061,7 +1061,7 @@ ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bpp) pu
             rawlen += runlen;
             runlen = 0;
             if (128 <= rawlen) {     // full packet, need to store it
-                long copysize = 128 * bpp;
+                long copysize = 128 * bytes_pp;
                 tgt_cmp[cmp_i++] = 0x7f; // raw packet header
                 tgt_cmp[cmp_i .. cmp_i+copysize] = line[raw_i .. raw_i+copysize];
                 cmp_i += copysize;
@@ -1074,7 +1074,7 @@ ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bpp) pu
             // store raw packet first, if any
             if (rawlen) {
                 assert(rawlen < 128);
-                long copysize = rawlen * bpp;
+                long copysize = rawlen * bytes_pp;
                 tgt_cmp[cmp_i++] = cast(ubyte) (rawlen-1); // raw packet header
                 tgt_cmp[cmp_i .. cmp_i+copysize] = line[raw_i .. raw_i+copysize];
                 cmp_i += copysize;
@@ -1083,15 +1083,15 @@ ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bpp) pu
 
             // store RLE packet
             tgt_cmp[cmp_i++] = cast(ubyte) (0x80 | (runlen-1)); // packet header
-            tgt_cmp[cmp_i .. cmp_i+bpp] = px[0..$];                   // packet data
-            cmp_i += bpp;
+            tgt_cmp[cmp_i .. cmp_i+bytes_pp] = px[0..$];       // packet data
+            cmp_i += bytes_pp;
             raw_i = i;
             runlen = 0;
         }
     }   // for
 
     if (rawlen) {   // last packet of the line
-        long copysize = rawlen * bpp;
+        long copysize = rawlen * bytes_pp;
         tgt_cmp[cmp_i++] = cast(ubyte) (rawlen-1); // raw packet header
         tgt_cmp[cmp_i .. cmp_i+copysize] = line[raw_i .. raw_i+copysize];
         cmp_i += copysize;
