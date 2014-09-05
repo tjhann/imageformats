@@ -2,6 +2,8 @@
 // Boost Software License - Version 1.0 - August 17th, 2003
 module imageformats;
 
+import std.algorithm;   // min
+import std.bitmanip;      // endianness stuff
 import std.stdio;   // File
 import std.string;  // toLower, lastIndexOf
 
@@ -98,10 +100,7 @@ private const(char)[] extract_extension_lowercase(in char[] filename) {
 // PNG
 // TODO finish paletted images
 
-import std.algorithm;   // min
-import std.bitmanip;      // bigEndianToNative()
 import std.digest.crc;
-import std.stdio;       // File
 import std.zlib;
 
 public:
@@ -693,10 +692,6 @@ static this() {
 // --------------------------------------------------------------------------------
 // TGA
 
-import std.algorithm;   // min
-import std.bitmanip;      // bigEndianToNative()
-import std.stdio;       // File
-
 public:
 
 TGA_Header read_tga_header(in char[] filename);
@@ -1154,10 +1149,7 @@ static this() {
     discarded much earlier.
 */
 
-import std.algorithm;   // min
-import std.bitmanip;
 import std.math;    // floor, ceil
-import std.stdio;
 import core.stdc.stdlib : alloca;
 
 //debug = DebugJPEG;
