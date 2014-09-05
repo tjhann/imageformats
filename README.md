@@ -12,11 +12,7 @@
 **Let me show you:**
 ```D
 import std.stdio;   // File
-// import all formats:
 import imageformats;
-// ...or import only what you need:
-import imageformats.png;
-import imageformats.tga;
 
 void main() {
     // optional last argument defines conversion
