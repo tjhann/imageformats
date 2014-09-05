@@ -2189,7 +2189,7 @@ private struct ImageIOFuncs {
     void function(File s, long w, long h, in ubyte[] data, int req_chans) write_image;
     void function(File s, out int w, out int h, out int c) read_info;
 }
-private static ImageIOFuncs[string] register;
+private immutable ImageIOFuncs[string] register;
 
 private void readExact(File stream, ubyte[] buffer, size_t bytes) {
     auto slice = stream.rawRead(buffer[0..bytes]);
