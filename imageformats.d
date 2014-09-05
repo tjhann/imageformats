@@ -5,12 +5,12 @@ module imageformats;
 import std.stdio;   // File
 import std.string;  // toLower, lastIndexOf
 
-class ImageIOException : Exception {
-   @safe pure const
-   this(string msg, string file = __FILE__, size_t line = __LINE__) {
-       super(msg, file, line);
-   }
-}
+// ----------------------------------------------------------------------
+// Generic API:
+
+void read_image_info(in char[] filename, out int w, out int h, out int chans);
+IF_Image read_image(in char[] filename, int req_chans = 0);
+void write_image(in char[] filename, long w, long h, in ubyte[] data, int req_chans = 0);
 
 struct IF_Image {
     long w, h;
@@ -31,6 +31,15 @@ enum AlphaType {
     Premul,
     Other
 }
+
+class ImageIOException : Exception {
+   @safe pure const
+   this(string msg, string file = __FILE__, size_t line = __LINE__) {
+       super(msg, file, line);
+   }
+}
+
+// ----------------------------------------------------------------------
 
 // chans is set to zero if num of channels is unknown
 void read_image_info(in char[] filename, out int w, out int h, out int chans) {
