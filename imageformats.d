@@ -86,8 +86,8 @@ private const(char)[] extract_extension_lowercase(in char[] filename) {
 }
 
 // --------------------------------------------------------------------------------
+// PNG
 // TODO finish paletted images
-//module imageformats.png;
 
 import std.algorithm;   // min
 import std.bitmanip;      // bigEndianToNative()
@@ -95,7 +95,6 @@ import std.digest.crc;
 import std.stdio;       // File
 import std.zlib;
 
-// ----------------------------------------------------------------------
 public:
 
 PNG_Header read_png_header(in char[] filename);
@@ -683,13 +682,12 @@ static this() {
 }
 
 // --------------------------------------------------------------------------------
-//module imageformats.tga;
+// TGA
 
 import std.algorithm;   // min
 import std.bitmanip;      // bigEndianToNative()
 import std.stdio;       // File
 
-// ----------------------------------------------------------------------
 public:
 
 TGA_Header read_tga_header(in char[] filename);
@@ -1138,7 +1136,7 @@ static this() {
 
 // --------------------------------------------------------------------------------
 /*
-    Only decodes baseline JPEG/JFIF images
+    Baseline JPEG/JFIF decoder
     - not quite optimized but should be well usable already. seems to be
     something like 1.78 times slower than stb_image. i think the nextbit
     and receive functions especially need work.
@@ -1146,7 +1144,6 @@ static this() {
     only grayscale result is requested, the Cb and Cr components could be
     discarded much earlier.
 */
-//module imageformats.jpeg;
 
 import std.algorithm;   // min
 import std.bitmanip;
@@ -1156,7 +1153,6 @@ import core.stdc.stdlib : alloca;
 
 //debug = DebugJPEG;
 
-// ----------------------------------------------------------------------
 public:
 
 JPEG_Header read_jpeg_header(in char[] filename);
