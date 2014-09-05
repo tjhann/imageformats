@@ -15,10 +15,10 @@ IF_Image read_image(in char[] filename, int req_chans = 0);
 void write_image(in char[] filename, long w, long h, in ubyte[] data, int req_chans = 0);
 
 struct IF_Image {
-    long w, h;
-    ColFmt chans;
-    AlphaType alpha_type;
-    ubyte[] data;
+    long        w, h;
+    ColFmt      chans;
+    AlphaType   alpha_type;
+    ubyte[]     data;
 }
 
 enum ColFmt {
