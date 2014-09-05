@@ -159,9 +159,7 @@ IF_Image read_jpeg(File stream, int req_chans = 0) {
     result.w = dc.width;
     result.h = dc.height;
     result.chans = cast(ColFmt) dc.tgt_chans;
-    result.alpha_type = (result.chans == 2 || result.chans == 4)
-                      ? AlphaType.Plain
-                      : AlphaType.NoData;
+    result.alpha_type = AlphaType.Plain;
     result.data = decode_jpeg(dc);
     return result;
 }
