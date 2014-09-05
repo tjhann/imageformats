@@ -116,8 +116,11 @@ package enum _ColFmt : int {
 
 package pure
 void function(in ubyte[] src, ubyte[] tgt) get_converter(int src_chans, int tgt_chans) {
+    int combo(int a, int b) pure nothrow { return a*16 + b; }
+
     if (src_chans == tgt_chans)
         return &copy_line;
+
     switch (combo(src_chans, tgt_chans)) with (_ColFmt) {
         case combo(Y, YA)      : return &Y_to_YA;
         case combo(Y, RGB)     : return &Y_to_RGB;
@@ -149,10 +152,6 @@ void function(in ubyte[] src, ubyte[] tgt) get_converter(int src_chans, int tgt_
         case combo(BGRA, RGBA) : return &BGRA_to_RGBA;
         default                : throw new ImageIOException("internal error");
     }
-}
-
-private int combo(int a, int b) pure nothrow {
-    return a*16 + b;
 }
 
 package void copy_line(in ubyte[] src, ubyte[] tgt) pure nothrow {
