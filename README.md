@@ -1,7 +1,6 @@
 **Image loading and saving**
 - returned image data is always 8-bit (Y/YA/RGB/RGBA)
 - no image processing (plan is to keep this stuff out)
-- bloat can be avoided by importing only needed formats
 
 | Format | Decoder            | Encoder                           |
 | ---    | ---                | ---                               |
