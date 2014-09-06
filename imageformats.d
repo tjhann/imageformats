@@ -1142,8 +1142,8 @@ static this() {
 /*
     Baseline JPEG/JFIF decoder
     - not quite optimized but should be well usable already. seems to be
-    something like 1.78 times slower than stb_image. i think the nextbit
-    and receive functions especially need work.
+    something like 1.66 times slower with ldc and 1.78 times slower with gdc
+    than stb_image.
     - memory use could be reduced by processing MCU-row at a time, and, if
     only grayscale result is requested, the Cb and Cr components could be
     discarded much earlier.
