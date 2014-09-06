@@ -885,7 +885,7 @@ struct TGA_Decoder {
     long w, h;
     bool origin_at_top;    // src
     int bytes_pp;
-    bool rle;   // run length comressed
+    bool rle;   // run length compressed
     _ColFmt src_fmt;
     int tgt_chans;
 }
