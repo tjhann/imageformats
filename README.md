@@ -1,6 +1,7 @@
 **Image loading and saving**
 - returned image data is always 8-bit (Y/YA/RGB/RGBA)
-- no image processing (plan is to keep this stuff out)
+- no image processing (this stuff will be kept out)
+- not optimal for 32-bit systems
 
 | Format | Decoder            | Encoder                           |
 | ---    | ---                | ---                               |
@@ -15,24 +16,20 @@ import imageformats;
 
 void main() {
     // optional last argument defines conversion
-    IF_Image a = read_image("peruna.png");
-    IF_Image b = read_image("peruna.png", ColFmt.YA);
-    IF_Image c = read_image("peruna.png", ColFmt.RGB);
+    long w, h, chans;
+    ubyte[] pixels = read_image("peruna.png", w, h, chans);
+    //ubyte[] pixels = read_image("peruna.png", w, h, chans, ColFmt.YA);
+    //ubyte[] pixels = read_image("peruna.png", w, h, chans, ColFmt.RGB);
 
-    write_image("peruna.tga", a.w, a.h, a.data);
-    write_image("peruna.tga", a.w, a.h, a.data, ColFmt.RGBA);
+    write_image("peruna.tga", w, h, pixels);
+    write_image("peruna.tga", w, h, pixels, ColFmt.RGBA);
 
-    int w, h, chans;
+    // get basic info without decoding
     read_image_info("peruna.png", w, h, chans);
 
     // there are also format specific functions
     PNG_Header hdr = read_png_header("peruna.png"); // get detailed info
-    IF_Image d = read_png("peruna.png");
-    write_tga("peruna.tga", d.w, d.h, d.data);
-
-    // can also pass a File to all the non-generic functions
-    auto f = File("peruna.tga", "wb");
-    scope(exit) f.close();
-    write_png(f, d.w, d.h, d.data);
+    ubyte[] idat = read_jpeg("porkkana.jpg", w, h, chans, ColFmt.Y);
+    write_tga("porkkana.tga", w, h, idat);
 }
 ```

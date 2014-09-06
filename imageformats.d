@@ -3,22 +3,57 @@
 module imageformats;
 
 import std.algorithm;   // min
-import std.bitmanip;      // endianness stuff
-import std.stdio;   // File
+import std.bitmanip;   // endianness stuff
+import std.stdio;    // File
 import std.string;  // toLower, lastIndexOf
 
-// ----------------------------------------------------------------------
-// Generic API:
+ubyte[] read_image(in char[] file, out long w, out long h, out long chans, long reqc = 0)
+{
+    long _;
+    return read_image(file, w, h, chans, _, reqc);
+}
 
-void read_image_info(in char[] filename, out int w, out int h, out int chans);
-IF_Image read_image(in char[] filename, int req_chans = 0);
-void write_image(in char[] filename, long w, long h, in ubyte[] data, int req_chans = 0);
+ubyte[] read_image(in char[] file, out long w, out long h, out long chans, out long a, long rc)
+{
+    const(char)[] ext = extract_extension_lowercase(file);
 
-struct IF_Image {
-    long        w, h;
-    ColFmt      chans;
-    AlphaType   alpha_type;
-    ubyte[]     data;
+    if (ext in register) {
+        ImageIOFuncs funcs = register[ext];
+        if (funcs.read_image is null)
+            throw new ImageIOException("null function pointer");
+        return funcs.read_image(Reader(file), w, h, chans, a, rc);
+    }
+
+    throw new ImageIOException("unknown image extension/type");
+}
+
+void write_image(in char[] filename, long w, long h, in ubyte[] data, int req_chans = 0) {
+    const(char)[] ext = extract_extension_lowercase(filename);
+
+    if (ext in register) {
+        ImageIOFuncs funcs = register[ext];
+        if (funcs.write_image is null)
+            throw new ImageIOException("null function pointer");
+        funcs.write_image(Writer(filename), w, h, data, req_chans);
+        return;
+    }
+
+    throw new ImageIOException("unknown image extension/type");
+}
+
+// chans is set to zero if num of channels is unknown
+void read_image_info(in char[] filename, out long w, out long h, out long chans) {
+    const(char)[] ext = extract_extension_lowercase(filename);
+
+    if (ext in register) {
+        ImageIOFuncs funcs = register[ext];
+        if (funcs.read_info is null)
+            throw new ImageIOException("null function pointer");
+        funcs.read_info(Reader(filename), w, h, chans);
+        return;
+    }
+
+    throw new ImageIOException("unknown image extension/type");
 }
 
 enum ColFmt {
@@ -41,60 +76,8 @@ class ImageIOException : Exception {
    }
 }
 
-// ----------------------------------------------------------------------
-
-// chans is set to zero if num of channels is unknown
-void read_image_info(in char[] filename, out int w, out int h, out int chans) {
-    const(char)[] ext = extract_extension_lowercase(filename);
-
-    if (ext in register) {
-        ImageIOFuncs funcs = register[ext];
-        if (funcs.read_info is null)
-            throw new ImageIOException("null function pointer");
-        auto stream = File(filename.idup, "rb");
-        scope(exit) stream.close();
-        funcs.read_info(stream, w, h, chans);
-        return;
-    }
-
-    throw new ImageIOException("unknown image extension/type");
-}
-
-IF_Image read_image(in char[] filename, int req_chans = 0) {
-    const(char)[] ext = extract_extension_lowercase(filename);
-
-    if (ext in register) {
-        ImageIOFuncs funcs = register[ext];
-        if (funcs.read_image is null)
-            throw new ImageIOException("null function pointer");
-        auto stream = File(filename.idup, "rb");
-        scope(exit) stream.close();
-        return funcs.read_image(stream, req_chans);
-    }
-
-    throw new ImageIOException("unknown image extension/type");
-}
-
-void write_image(in char[] filename, long w, long h, in ubyte[] data, int req_chans = 0) {
-    const(char)[] ext = extract_extension_lowercase(filename);
-
-    if (ext in register) {
-        ImageIOFuncs funcs = register[ext];
-        if (funcs.write_image is null)
-            throw new ImageIOException("null function pointer");
-        auto stream = File(filename.idup, "wb");
-        scope(exit) stream.close();
-        funcs.write_image(stream, w, h, data, req_chans);
-        return;
-    }
-
-    throw new ImageIOException("unknown image extension/type");
-}
-
-private const(char)[] extract_extension_lowercase(in char[] filename) {
-    ptrdiff_t di = filename.lastIndexOf('.');
-    return (0 < di && di+1 < filename.length) ? filename[di+1..$].toLower() : "";
-}
+// From here, things are private by default and public only explicitly.
+private:
 
 // --------------------------------------------------------------------------------
 // PNG
@@ -103,16 +86,7 @@ private const(char)[] extract_extension_lowercase(in char[] filename) {
 import std.digest.crc;
 import std.zlib;
 
-public:
-
-PNG_Header read_png_header(in char[] filename);
-PNG_Header read_png_header(File stream);
-IF_Image read_png(in char[] filename, int req_chans = 0);
-IF_Image read_png(File stream, int req_chans = 0);
-void write_png(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0);
-void write_png(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0);
-
-struct PNG_Header {
+public struct PNG_Header {
     int     width;
     int     height;
     ubyte   bit_depth;
@@ -122,15 +96,11 @@ struct PNG_Header {
     ubyte   interlace_method;
 }
 
-// ----------------------------------------------------------------------
-
-PNG_Header read_png_header(in char[] filename) {
-    auto stream = File(filename.idup, "rb");
-    scope(exit) stream.close();
-    return read_png_header(stream);
+public PNG_Header read_png_header(in char[] filename) {
+    return read_png_header(Reader(filename));
 }
 
-PNG_Header read_png_header(File stream) {
+public PNG_Header read_png_header(Reader stream) {
     ubyte[33] tmp = void;  // file header, IHDR len+type+data+crc
     stream.readExact(tmp, tmp.length);
 
@@ -151,15 +121,16 @@ PNG_Header read_png_header(File stream) {
     return header;
 }
 
-IF_Image read_png(in char[] filename, int req_chans = 0) {
-    if (!filename.length)
-        throw new ImageIOException("no filename");
-    auto stream = File(filename.idup, "rb");
-    scope(exit) stream.close();
-    return read_png(stream, req_chans);
+public ubyte[] read_png(in char[] file, out long w, out long h, out long chans,
+                                                            long req_chans = 0)
+{
+    long _;
+    return read_png(Reader(file), w, h, chans, _, req_chans);
 }
 
-IF_Image read_png(File stream, int req_chans = 0) {
+public ubyte[] read_png(Reader stream, out long w, out long h, out long chans, out long a,
+                                                                           long req_chans)
+{
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
@@ -179,33 +150,30 @@ IF_Image read_png(File stream, int req_chans = 0) {
         (hdr.interlace_method != 0 && hdr.interlace_method != 1))
         throw new ImageIOException("not supported");
 
-    PNG_Decoder dc;
-    dc.stream = stream;
-    dc.src_indexed = (hdr.color_type == PNG_ColorType.Idx);
-    dc.src_chans = channels(cast(PNG_ColorType) hdr.color_type);
-    dc.tgt_chans = (req_chans == 0) ? dc.src_chans : req_chans;
-    dc.ilace = hdr.interlace_method;
-    dc.w = hdr.width;
-    dc.h = hdr.height;
+    PNG_Decoder dc = {
+        stream      : stream,
+        src_indexed : (hdr.color_type == PNG_ColorType.Idx),
+        src_chans   : channels(cast(PNG_ColorType) hdr.color_type),
+        ilace       : hdr.interlace_method,
+        w           : hdr.width,
+        h           : hdr.height,
+    };
+    dc.tgt_chans = (req_chans == 0) ? dc.src_chans : cast(int) req_chans;
 
-    IF_Image result;
-    result.w = dc.w;
-    result.h = dc.h;
-    result.chans = cast(ColFmt) dc.tgt_chans;
-    result.alpha_type = AlphaType.Plain;
-    result.data = decode_png(dc);
-    return result;
+    w = dc.w;
+    h = dc.h;
+    chans = dc.tgt_chans;
+    a = AlphaType.Plain;
+    return decode_png(dc);
 }
 
-void write_png(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0) {
-    if (!filename.length)
-        throw new ImageIOException("no filename");
-    auto stream = File(filename.idup, "wb");
-    scope(exit) stream.close();
-    write_png(stream, w, h, data, tgt_chans);
+public void write_png(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
+{
+    write_png(Writer(file), w, h, data, tgt_chans);
 }
 
-void write_png(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
+public void write_png(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 0)
+{
     if (w < 1 || h < 1 || int.max < w || int.max < h)
         throw new ImageIOException("invalid dimensions");
     ulong src_chans = data.length / w / h;
@@ -214,20 +182,18 @@ void write_png(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) 
     if (src_chans * w * h != data.length)
         throw new ImageIOException("mismatching dimensions and length");
 
-    PNG_Encoder ec;
-    ec.stream = stream;
-    ec.w = cast(int) w;
-    ec.h = cast(int) h;
-    ec.src_chans = cast(int) src_chans;
-    ec.tgt_chans = (tgt_chans) ? tgt_chans : ec.src_chans;
-    ec.data = data;
+    PNG_Encoder ec = {
+        stream    : stream,
+        w         : cast(int) w,
+        h         : cast(int) h,
+        src_chans : cast(int) src_chans,
+        data      : data,
+    };
+    ec.tgt_chans = (tgt_chans) ? cast(int) tgt_chans : ec.src_chans;
 
     write_png(ec);
     stream.flush();
 }
-
-// ----------------------------------------------------------------------
-private:
 
 immutable ubyte[8] png_file_header =
     [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -252,7 +218,7 @@ PNG_ColorType color_type(int channels) pure nothrow {
 }
 
 struct PNG_Decoder {
-    File stream;
+    Reader stream;
     bool src_indexed;
     int src_chans;
     int tgt_chans;
@@ -572,7 +538,7 @@ ubyte paeth(ubyte a, ubyte b, ubyte c) pure nothrow {
 // PNG encoder
 
 struct PNG_Encoder {
-    File stream;
+    Writer stream;
     int w, h;
     int src_chans;
     int tgt_chans;
@@ -678,7 +644,7 @@ void write_IDAT_chunk(ref PNG_Encoder ec) {
     ec.writelen = 0;
 }
 
-void read_png_info(File stream, out int w, out int h, out int chans) {
+void read_png_info(Reader stream, out long w, out long h, out long chans) {
     PNG_Header hdr = read_png_header(stream);
     w = hdr.width;
     h = hdr.height;
@@ -692,16 +658,7 @@ static this() {
 // --------------------------------------------------------------------------------
 // TGA
 
-public:
-
-TGA_Header read_tga_header(in char[] filename);
-TGA_Header read_tga_header(File stream);
-IF_Image read_tga(in char[] filename, int req_chans = 0);
-IF_Image read_tga(File stream, int req_chans = 0);
-void write_tga(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0);
-void write_tga(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0);
-
-struct TGA_Header {
+public struct TGA_Header {
    ubyte id_length;
    ubyte palette_type;
    ubyte data_type;
@@ -716,15 +673,11 @@ struct TGA_Header {
    ubyte flags;
 }
 
-// ----------------------------------------------------------------------
-
-TGA_Header read_tga_header(in char[] filename) {
-    auto stream = File(filename.idup, "rb");
-    scope(exit) stream.close();
-    return read_tga_header(stream);
+public TGA_Header read_tga_header(in char[] filename) {
+    return read_tga_header(Reader(filename));
 }
 
-TGA_Header read_tga_header(File stream) {
+public TGA_Header read_tga_header(Reader stream) {
     ubyte[18] tmp = void;
     stream.readExact(tmp, tmp.length);
 
@@ -745,15 +698,14 @@ TGA_Header read_tga_header(File stream) {
     return header;
 }
 
-IF_Image read_tga(in char[] filename, int req_chans = 0) {
-    if (!filename.length)
-        throw new ImageIOException("no filename");
-    auto stream = File(filename.idup, "rb");
-    scope(exit) stream.close();
-    return read_tga(stream, req_chans);
+public ubyte[] read_tga(in char[] file, out long w, out long h, out long chans, long rc) {
+    long _;
+    return read_tga(Reader(file), w, h, chans, _, rc);
 }
 
-IF_Image read_tga(File stream, int req_chans = 0) {
+public ubyte[] read_tga(Reader stream, out long w, out long h, out long chans, out long a,
+                                                                           long req_chans)
+{
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
@@ -801,14 +753,15 @@ IF_Image read_tga(File stream, int req_chans = 0) {
     if (hdr.id_length)
         stream.seek(hdr.id_length, SEEK_CUR);
 
-    TGA_Decoder dc;
-    dc.stream         = stream;
-    dc.w              = hdr.width;
-    dc.h              = hdr.height;
-    dc.origin_at_top  = cast(bool) (hdr.flags & 0x20);  // src
-    dc.bytes_pp       = hdr.bits_pp / 8;
-    dc.rle            = rle;
-    dc.tgt_chans      = (req_chans == 0) ? src_chans : req_chans;
+    TGA_Decoder dc = {
+        stream         : stream,
+        w              : hdr.width,
+        h              : hdr.height,
+        origin_at_top  : cast(bool) (hdr.flags & 0x20),
+        bytes_pp       : hdr.bits_pp / 8,
+        rle            : rle,
+        tgt_chans      : (req_chans == 0) ? src_chans : cast(int) req_chans,
+    };
 
     switch (dc.bytes_pp) {
         case 1: dc.src_fmt = _ColFmt.Y; break;
@@ -818,17 +771,16 @@ IF_Image read_tga(File stream, int req_chans = 0) {
         default: throw new ImageIOException("TGA: format not supported");
     }
 
-    IF_Image result;
-    result.w = dc.w;
-    result.h = dc.h;
-    result.chans = cast(ColFmt) dc.tgt_chans;
-    result.data = decode_tga(dc);
+    w = cast(int) dc.w;
+    h = cast(int) dc.h;
+    chans = dc.tgt_chans;
+    ubyte[] pixels = decode_tga(dc);
 
     if (dc.src_fmt != _ColFmt.YA && dc.src_fmt != _ColFmt.BGRA)
-        return result;
+        return pixels;
 
     // fetch attribute type (plain/premultiplied/undefined alpha)
-    result.alpha_type = AlphaType.Plain; // guess it's plain alpha if can't fetch it
+    a = AlphaType.Plain; // guess it's plain alpha if can't fetch it
     try {
         ubyte[26] ftr = void;
         stream.seek(-26, SEEK_END);
@@ -838,24 +790,22 @@ IF_Image read_tga(File stream, int req_chans = 0) {
             stream.seek(extarea + 494, SEEK_SET);
             stream.readExact(ftr, 1);
             switch (ftr[0]) {
-                case 3: result.alpha_type = AlphaType.Plain; break;
-                case 4: result.alpha_type = AlphaType.Premul; break;
-                default: result.alpha_type = AlphaType.Other; break;
+                case 3: a = AlphaType.Plain; break;
+                case 4: a = AlphaType.Premul; break;
+                default: a = AlphaType.Other; break;
             }
         }
     } catch { }
-    return result;
+    return pixels;
 }
 
-void write_tga(in char[] filename, long w, long h, in ubyte[] data, int tgt_chans = 0) {
-    if (!filename.length)
-        throw new ImageIOException("no filename");
-    auto stream = File(filename.idup, "wb");
-    scope(exit) stream.close();
-    write_tga(stream, w, h, data, tgt_chans);
+public void write_tga(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
+{
+    write_tga(Writer(file), w, h, data, tgt_chans);
 }
 
-void write_tga(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) {
+public void write_tga(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 0)
+{
     if (w < 1 || h < 1 || ushort.max < w || ushort.max < h)
         throw new ImageIOException("invalid dimensions");
     ulong src_chans = data.length / w / h;
@@ -864,24 +814,22 @@ void write_tga(File stream, long w, long h, in ubyte[] data, int tgt_chans = 0) 
     if (src_chans * w * h != data.length)
         throw new ImageIOException("mismatching dimensions and length");
 
-    TGA_Encoder ec;
-    ec.stream = stream;
-    ec.w = cast(ushort) w;
-    ec.h = cast(ushort) h;
-    ec.src_chans = cast(int) src_chans;
-    ec.tgt_chans = (tgt_chans) ? tgt_chans : ec.src_chans;
-    ec.rle = true;
-    ec.data = data;
+    TGA_Encoder ec = {
+        stream    : stream,
+        w         : cast(ushort) w,
+        h         : cast(ushort) h,
+        src_chans : cast(int) src_chans,
+        rle       : true,
+        data      : data,
+    };
+    ec.tgt_chans = (tgt_chans) ? cast(int) tgt_chans : ec.src_chans;
 
     write_tga(ec);
     stream.flush();
 }
 
-// ----------------------------------------------------------------------
-private:
-
 struct TGA_Decoder {
-    File stream;
+    Reader stream;
     long w, h;
     bool origin_at_top;    // src
     int bytes_pp;
@@ -958,7 +906,7 @@ immutable ubyte[18] tga_footer_sig =
     ['T','R','U','E','V','I','S','I','O','N','-','X','F','I','L','E','.', 0];
 
 struct TGA_Encoder {
-    File stream;
+    Writer stream;
     ushort w, h;
     int src_chans;
     int tgt_chans;
@@ -1109,7 +1057,7 @@ enum TGA_DataType : ubyte {
     Gray_RLE      = 11,
 }
 
-void read_tga_info(File stream, out int w, out int h, out int chans) {
+void read_tga_info(Reader stream, out long w, out long h, out long chans) {
     TGA_Header hdr = read_tga_header(stream);
     w = hdr.width;
     h = hdr.height;
@@ -1154,14 +1102,7 @@ import core.stdc.stdlib : alloca;
 
 //debug = DebugJPEG;
 
-public:
-
-JPEG_Header read_jpeg_header(in char[] filename);
-JPEG_Header read_jpeg_header(File stream);
-IF_Image read_jpeg(in char[] filename, int req_chans = 0);
-IF_Image read_jpeg(File stream, int req_chans = 0);
-
-struct JPEG_Header {    // JFIF
+public struct JPEG_Header {    // JFIF
     ubyte version_major;
     ubyte version_minor;
     ushort width, height;
@@ -1173,17 +1114,11 @@ struct JPEG_Header {    // JFIF
     ubyte type; // 0xc0 = baseline, 0xc2 = progressive, ..., see Marker
 }
 
-// ----------------------------------------------------------------------
-
-JPEG_Header read_jpeg_header(in char[] filename) {
-    auto stream = File(filename.idup, "rb");
-    scope(exit) stream.close();
-    return read_jpeg_header(stream);
+public JPEG_Header read_jpeg_header(in char[] filename) {
+    return read_jpeg_header(Reader(filename));
 }
 
-JPEG_Header read_jpeg_header(File stream) {
-    if (!stream.isOpen)
-        throw new ImageIOException("File not open");
+public JPEG_Header read_jpeg_header(Reader stream) {
     ubyte[20 + 8] tmp = void;   // SOI, APP0 + SOF0
     stream.readExact(tmp, 20);
 
@@ -1244,16 +1179,17 @@ JPEG_Header read_jpeg_header(File stream) {
     assert(0);
 }
 
-IF_Image read_jpeg(in char[] filename, int req_chans = 0) {
-    if (!filename.length)
-        throw new ImageIOException("no filename");
-    auto stream = File(filename.idup, "rb");
-    scope(exit) stream.close();
-    return read_jpeg(stream, req_chans);
+public ubyte[] read_jpeg(in char[] file, out long w, out long h, out long chans,
+                                                            long req_chans = 0)
+{
+    long _;
+    return read_jpeg(Reader(file), w, h, chans, _, req_chans);
 }
 
-IF_Image read_jpeg(File stream, int req_chans = 0) {
-    if (!stream.isOpen || req_chans < 0 || 4 < req_chans)
+public ubyte[] read_jpeg(Reader stream, out long w, out long h, out long chans, out long a,
+                                                                            long req_chans)
+{
+    if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
     ubyte[20] tmp = void;   // SOI, APP0, len, data
@@ -1278,29 +1214,23 @@ IF_Image read_jpeg(File stream, int req_chans = 0) {
     if (thumbsize)
         stream.seek(thumbsize, SEEK_CUR);
 
-    JPEG_Decoder dc;
-    dc.stream = stream;
+    JPEG_Decoder dc = { stream: stream };
 
     read_markers(dc);   // reads until first scan header or eoi
     if (dc.eoi_reached)
         throw new ImageIOException("no image data");
 
-    dc.tgt_chans = (req_chans == 0) ? dc.num_comps : req_chans;
+    dc.tgt_chans = (req_chans == 0) ? dc.num_comps : cast(int) req_chans;
 
-    IF_Image result;
-    result.w = dc.width;
-    result.h = dc.height;
-    result.chans = cast(ColFmt) dc.tgt_chans;
-    result.alpha_type = AlphaType.Plain;
-    result.data = decode_jpeg(dc);
-    return result;
+    w = dc.width;
+    h = dc.height;
+    chans = dc.tgt_chans;
+    a = AlphaType.Plain;
+    return decode_jpeg(dc);
 }
 
-// ----------------------------------------------------------------------
-private:
-
 struct JPEG_Decoder {
-    File stream;
+    Reader stream;
 
     bool has_frame_header = false;
     bool eoi_reached = false;
@@ -1910,7 +1840,7 @@ void decode_scan(ref JPEG_Decoder dc) {
 }
 
 // RST0-RST7
-void read_restart(File stream) {
+void read_restart(Reader stream) {
     ubyte[2] tmp = void;
     stream.readExact(tmp, tmp.length);
     if (tmp[0] != 0xff || tmp[1] < Marker.RST0 || Marker.RST7 < tmp[1])
@@ -1930,7 +1860,9 @@ immutable ubyte[64] dezigzag = [
 ];
 
 // decode entropy, dequantize & dezigzag (see section F.2)
-short[64] decode_block(ref JPEG_Decoder dc, ref JPEG_Decoder.Component comp, ref ubyte[64] qtable) {
+short[64] decode_block(ref JPEG_Decoder dc, ref JPEG_Decoder.Component comp,
+                                                       ref ubyte[64] qtable)
+{
     short[64] res;
 
     ubyte t = decode_huff(dc, dc.dc_tables[comp.dc_table]);
@@ -2168,7 +2100,7 @@ pure ubyte stbi__clamp(int x) {
 // the above is adapted from stb_image
 // ------------------------------------------------------------
 
-void read_jpeg_info(File stream, out int w, out int h, out int chans) {
+void read_jpeg_info(Reader stream, out long w, out long h, out long chans) {
     JPEG_Header hdr = read_jpeg_header(stream);
     w = hdr.width;
     h = hdr.height;
@@ -2181,25 +2113,9 @@ static this() {
 }
 
 // --------------------------------------------------------------------------------
-// Register
-
-private struct ImageIOFuncs {
-    IF_Image function(File s, int req_chans) read_image;
-    void function(File s, long w, long h, in ubyte[] data, int req_chans) write_image;
-    void function(File s, out int w, out int h, out int c) read_info;
-}
-private immutable ImageIOFuncs[string] register;
-
-private void readExact(File stream, ubyte[] buffer, size_t bytes) {
-    auto slice = stream.rawRead(buffer[0..bytes]);
-    if (slice.length != bytes)
-        throw new Exception("not enough data");
-}
-
-// --------------------------------------------------------------------------------
 // Conversions
 
-private enum _ColFmt : int {
+enum _ColFmt : int {
     Unknown = 0,
     Y = 1,
     YA,
@@ -2209,7 +2125,7 @@ private enum _ColFmt : int {
     BGRA,
 }
 
-private pure
+pure
 void function(in ubyte[] src, ubyte[] tgt) get_converter(int src_chans, int tgt_chans) {
     int combo(int a, int b) pure nothrow { return a*16 + b; }
 
@@ -2249,104 +2165,104 @@ void function(in ubyte[] src, ubyte[] tgt) get_converter(int src_chans, int tgt_
     }
 }
 
-private void copy_line(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void copy_line(in ubyte[] src, ubyte[] tgt) pure nothrow {
     tgt[0..$] = src[0..$];
 }
 
-private ubyte luminance(ubyte r, ubyte g, ubyte b) pure nothrow {
+ubyte luminance(ubyte r, ubyte g, ubyte b) pure nothrow {
     return cast(ubyte) (0.21*r + 0.64*g + 0.15*b); // somewhat arbitrary weights
 }
 
-private void Y_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void Y_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=1, t+=2) {
         tgt[t] = src[k];
         tgt[t+1] = 255;
     }
 }
 
-private alias Y_to_BGR = Y_to_RGB;
-private void Y_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
+alias Y_to_BGR = Y_to_RGB;
+void Y_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=1, t+=3)
         tgt[t .. t+3] = src[k];
 }
 
-private alias Y_to_BGRA = Y_to_RGBA;
-private void Y_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+alias Y_to_BGRA = Y_to_RGBA;
+void Y_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=1, t+=4) {
         tgt[t .. t+3] = src[k];
         tgt[t+3] = 255;
     }
 }
 
-private void YA_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void YA_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=2, t+=1)
         tgt[t] = src[k];
 }
 
-private alias YA_to_BGR = YA_to_RGB;
-private void YA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
+alias YA_to_BGR = YA_to_RGB;
+void YA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=2, t+=3)
         tgt[t .. t+3] = src[k];
 }
 
-private alias YA_to_BGRA = YA_to_RGBA;
-private void YA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+alias YA_to_BGRA = YA_to_RGBA;
+void YA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=2, t+=4) {
         tgt[t .. t+3] = src[k];
         tgt[t+3] = src[k+1];
     }
 }
 
-private void RGB_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void RGB_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=3, t+=1)
         tgt[t] = luminance(src[k], src[k+1], src[k+2]);
 }
 
-private void RGB_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void RGB_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=3, t+=2) {
         tgt[t] = luminance(src[k], src[k+1], src[k+2]);
         tgt[t+1] = 255;
     }
 }
 
-private void RGB_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void RGB_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=3, t+=4) {
         tgt[t .. t+3] = src[k .. k+3];
         tgt[t+3] = 255;
     }
 }
 
-private void RGBA_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void RGBA_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=4, t+=1)
         tgt[t] = luminance(src[k], src[k+1], src[k+2]);
 }
 
-private void RGBA_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void RGBA_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=4, t+=2) {
         tgt[t] = luminance(src[k], src[k+1], src[k+2]);
         tgt[t+1] = src[k+3];
     }
 }
 
-private void RGBA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void RGBA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=4, t+=3)
         tgt[t .. t+3] = src[k .. k+3];
 }
 
-private void BGR_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void BGR_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=3, t+=1)
         tgt[t] = luminance(src[k+2], src[k+1], src[k+1]);
 }
 
-private void BGR_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void BGR_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=3, t+=2) {
         tgt[t] = luminance(src[k+2], src[k+1], src[k+1]);
         tgt[t+1] = 255;
     }
 }
 
-private alias RGB_to_BGR = BGR_to_RGB;
-private void BGR_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
+alias RGB_to_BGR = BGR_to_RGB;
+void BGR_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k;   k < src.length;   k+=3) {
         tgt[k  ] = src[k+2];
         tgt[k+1] = src[k+1];
@@ -2354,8 +2270,8 @@ private void BGR_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
     }
 }
 
-private alias RGB_to_BGRA = BGR_to_RGBA;
-private void BGR_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+alias RGB_to_BGRA = BGR_to_RGBA;
+void BGR_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=3, t+=4) {
         tgt[t  ] = src[k+2];
         tgt[t+1] = src[k+1];
@@ -2364,20 +2280,20 @@ private void BGR_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     }
 }
 
-private void BGRA_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void BGRA_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=4, t+=1)
         tgt[t] = luminance(src[k+2], src[k+1], src[k]);
 }
 
-private void BGRA_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void BGRA_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=4, t+=2) {
         tgt[t] = luminance(src[k+2], src[k+1], src[k]);
         tgt[t+1] = 255;
     }
 }
 
-private alias RGBA_to_BGR = BGRA_to_RGB;
-private void BGRA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
+alias RGBA_to_BGR = BGRA_to_RGB;
+void BGRA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=4, t+=3) {
         tgt[t  ] = src[k+2];
         tgt[t+1] = src[k+1];
@@ -2385,12 +2301,83 @@ private void BGRA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
     }
 }
 
-private alias RGBA_to_BGRA = BGRA_to_RGBA;
-private void BGRA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+alias RGBA_to_BGRA = BGRA_to_RGBA;
+void BGRA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
     for (long k, t;   k < src.length;   k+=4, t+=4) {
         tgt[t  ] = src[k+2];
         tgt[t+1] = src[k+1];
         tgt[t+2] = src[k  ];
         tgt[t+3] = src[k+3];
     }
+}
+
+// --------------------------------------------------------------------------------
+
+public struct Reader {
+    const void delegate(ubyte[], size_t) readExact;
+    const void delegate(long, int) seek;
+
+    this(in char[] filename) {
+        this(File(filename.idup, "rb"));
+    }
+
+    this(File f) {
+        if (!f.isOpen)
+            throw new ImageIOException("File not open");
+        this.f = f;
+        this.readExact = &file_readExact;
+        this.seek = &file_seek;
+    }
+
+    private:
+
+    File f;
+    void file_readExact(ubyte[] buffer, size_t bytes) {
+        auto slice = this.f.rawRead(buffer[0..bytes]);
+        if (slice.length != bytes)
+            throw new Exception("not enough data");
+    }
+    void file_seek(long offset, int origin) {
+        this.f.seek(offset, origin);
+    }
+}
+
+public struct Writer {
+    const void delegate(in ubyte[]) rawWrite;
+    const void delegate() flush;
+
+    this(in char[] filename) {
+        this(File(filename.idup, "wb"));
+    }
+
+    this(File f) {
+        if (!f.isOpen)
+            throw new ImageIOException("File not open");
+        this.f = f;
+        this.rawWrite = &file_rawWrite;
+        this.flush = &file_flush;
+    }
+
+    private:
+
+    File f;
+    void file_rawWrite(in ubyte[] block) {
+        this.f.rawWrite(block);
+    }
+    void file_flush() {
+        this.f.flush();
+    }
+}
+
+const(char)[] extract_extension_lowercase(in char[] filename) {
+    ptrdiff_t di = filename.lastIndexOf('.');
+    return (0 < di && di+1 < filename.length) ? filename[di+1..$].toLower() : "";
+}
+
+immutable ImageIOFuncs[string] register;
+
+struct ImageIOFuncs {
+    ubyte[] function(Reader s, out long w, out long h, out long c, out long a, long r) read_image;
+    void function(Writer s, long w, long h, in ubyte[] data, long req_chans) write_image;
+    void function(Reader s, out long w, out long h, out long c) read_info;
 }
