@@ -2087,7 +2087,7 @@ pure void STBI__IDCT_1D(ref int t0, ref int t1, ref int t2, ref int t3,
 }
 
 // idct and level-shift
-pure void stbi__idct_block(ubyte* dst, int dst_stride, in short[64] data) {
+pure void stbi__idct_block(ubyte* dst, int dst_stride, in ref short[64] data) {
    int i;
    int[64] val;
    int* v = val.ptr;
