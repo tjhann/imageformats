@@ -829,8 +829,8 @@ IF_Image read_tga(File stream, int req_chans = 0) {
 
     // fetch attribute type (plain/premultiplied/undefined alpha)
     result.alpha_type = AlphaType.Plain; // guess it's plain alpha if can't fetch it
-    ubyte[26] ftr = void;
     try {
+        ubyte[26] ftr = void;
         stream.seek(-26, SEEK_END);
         stream.readExact(ftr, 26);
         if (ftr[8..26] == tga_footer_sig) {
