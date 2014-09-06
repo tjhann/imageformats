@@ -1864,7 +1864,24 @@ void decode_scan(ref JPEG_Decoder dc) {
 
     foreach (mcu_j; 0 .. dc.num_mcu_y) {
         foreach (mcu_i; 0 .. dc.num_mcu_x) {
-            decode_mcu(dc, mcu_i, mcu_j);
+
+            // decode mcu
+            foreach (_c; 0..dc.num_comps) {
+                auto comp = &dc.comps[dc.index_for[_c]];
+                foreach (du_j; 0 .. comp.sfy) {
+                    foreach (du_i; 0 .. comp.sfx) {
+                        // decode entropy, dequantize & dezigzag
+                        short[64] data = decode_block(dc, *comp, dc.qtables[comp.qtable]);
+                        // idct & level-shift
+                        int outx = (mcu_i * comp.sfx + du_i) * 8;
+                        int outy = (mcu_j * comp.sfy + du_j) * 8;
+                        int dst_stride = dc.num_mcu_x * comp.sfx*8;
+                        ubyte* dst = comp.data.ptr + outy*dst_stride + outx;
+                        stbi__idct_block(dst, dst_stride, data);
+                    }
+                }
+            }
+
             --mcus;
 
             if (!mcus) {
@@ -1899,25 +1916,6 @@ void read_restart(File stream) {
     if (tmp[0] != 0xff || tmp[1] < Marker.RST0 || Marker.RST7 < tmp[1])
         throw new ImageIOException("reset marker missing");
     // the markers should cycle 0 through 7, could check that here...
-}
-
-void decode_mcu(ref JPEG_Decoder dc, in int mcu_i, in int mcu_j) {
-    foreach (_c; 0..dc.num_comps) {
-        auto comp = &dc.comps[dc.index_for[_c]];
-        foreach (du_j; 0 .. comp.sfy) {
-            foreach (du_i; 0 .. comp.sfx) {
-                // decode entropy, dequantize & dezigzag
-                short[64] data = decode_block(dc, *comp, dc.qtables[comp.qtable]);
-
-                // idct & level-shift
-                int outx = (mcu_i * comp.sfx + du_i) * 8;
-                int outy = (mcu_j * comp.sfy + du_j) * 8;
-                int dst_stride = dc.num_mcu_x * comp.sfx*8;
-                ubyte* dst = comp.data.ptr + outy*dst_stride + outx;
-                stbi__idct_block(dst, dst_stride, data);
-            }
-        }
-    }
 }
 
 immutable ubyte[64] dezigzag = [
