@@ -1861,7 +1861,7 @@ immutable ubyte[64] dezigzag = [
 
 // decode entropy, dequantize & dezigzag (see section F.2)
 short[64] decode_block(ref JPEG_Decoder dc, ref JPEG_Decoder.Component comp,
-                                                       ref ubyte[64] qtable)
+                                                    in ref ubyte[64] qtable)
 {
     short[64] res;
 
