@@ -128,6 +128,12 @@ public ubyte[] read_png(in char[] file, out long w, out long h, out long chans,
     return read_png(Reader(file), w, h, chans, _, req_chans);
 }
 
+public ubyte[] read_png_from_mem(in ubyte[] source, out long w, out long h,
+                            out long chans, out long a, long req_chans = 0)
+{
+    return read_png(Reader(source), w, h, chans, a, req_chans);
+}
+
 public ubyte[] read_png(Reader stream, out long w, out long h, out long chans, out long a,
                                                                            long req_chans)
 {
@@ -170,6 +176,12 @@ public ubyte[] read_png(Reader stream, out long w, out long h, out long chans, o
 public void write_png(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
 {
     write_png(Writer(file), w, h, data, tgt_chans);
+}
+
+public ubyte[] write_png_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
+    auto writer = Writer(0);
+    write_png(writer, w, h, data, tgt_chans);
+    return writer.result;
 }
 
 public void write_png(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 0)
@@ -703,6 +715,12 @@ public ubyte[] read_tga(in char[] file, out long w, out long h, out long chans, 
     return read_tga(Reader(file), w, h, chans, _, rc);
 }
 
+public ubyte[] read_tga_from_mem(in ubyte[] source, out long w, out long h,
+                            out long chans, out long a, long req_chans = 0)
+{
+    return read_tga(Reader(source), w, h, chans, a, req_chans);
+}
+
 public ubyte[] read_tga(Reader stream, out long w, out long h, out long chans, out long a,
                                                                            long req_chans)
 {
@@ -802,6 +820,12 @@ public ubyte[] read_tga(Reader stream, out long w, out long h, out long chans, o
 public void write_tga(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
 {
     write_tga(Writer(file), w, h, data, tgt_chans);
+}
+
+public ubyte[] write_tga_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
+    auto writer = Writer(0);
+    write_tga(writer, w, h, data, tgt_chans);
+    return writer.result;
 }
 
 public void write_tga(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 0)
@@ -1184,6 +1208,12 @@ public ubyte[] read_jpeg(in char[] file, out long w, out long h, out long chans,
 {
     long _;
     return read_jpeg(Reader(file), w, h, chans, _, req_chans);
+}
+
+public ubyte[] read_jpeg_from_mem(in ubyte[] source, out long w, out long h,
+                            out long chans, out long a, long req_chans = 0)
+{
+    return read_jpeg(Reader(source), w, h, chans, a, req_chans);
 }
 
 public ubyte[] read_jpeg(Reader stream, out long w, out long h, out long chans, out long a,
@@ -2313,7 +2343,7 @@ void BGRA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
 
 // --------------------------------------------------------------------------------
 
-public struct Reader {
+struct Reader {
     const void delegate(ubyte[], size_t) readExact;
     const void delegate(long, int) seek;
 
@@ -2322,11 +2352,16 @@ public struct Reader {
     }
 
     this(File f) {
-        if (!f.isOpen)
-            throw new ImageIOException("File not open");
+        if (!f.isOpen) throw new ImageIOException("File not open");
         this.f = f;
         this.readExact = &file_readExact;
         this.seek = &file_seek;
+    }
+
+    this(in ubyte[] source) {
+        this.source = source;
+        this.readExact = &mem_readExact;
+        this.seek = &mem_seek;
     }
 
     private:
@@ -2337,12 +2372,40 @@ public struct Reader {
         if (slice.length != bytes)
             throw new Exception("not enough data");
     }
-    void file_seek(long offset, int origin) {
-        this.f.seek(offset, origin);
+    void file_seek(long offset, int origin) { this.f.seek(offset, origin); }
+
+    const ubyte[] source;
+    long cursor;
+    void mem_readExact(ubyte[] buffer, size_t bytes) {
+        if (source.length - cursor < bytes)
+            throw new Exception("not enough data");
+        buffer[0..bytes] = source[cursor .. cursor+bytes];
+        cursor += bytes;
+    }
+    void mem_seek(long offset, int origin) {
+        switch (origin) {
+            case SEEK_SET:
+                if (offset < 0 || source.length <= offset)
+                    throw new Exception("seek error");
+                cursor = offset;
+                break;
+            case SEEK_CUR:
+                long dst = cursor + offset;
+                if (dst < 0 || source.length <= dst)
+                    throw new Exception("seek error");
+                cursor = dst;
+                break;
+            case SEEK_END:
+                if (0 <= offset || source.length < -offset)
+                    throw new Exception("seek error");
+                cursor = cast(long) source.length + offset;
+                break;
+            default: assert(0);
+        }
     }
 }
 
-public struct Writer {
+struct Writer {
     const void delegate(in ubyte[]) rawWrite;
     const void delegate() flush;
 
@@ -2351,22 +2414,28 @@ public struct Writer {
     }
 
     this(File f) {
-        if (!f.isOpen)
-            throw new ImageIOException("File not open");
+        if (!f.isOpen) throw new ImageIOException("File not open");
         this.f = f;
         this.rawWrite = &file_rawWrite;
         this.flush = &file_flush;
     }
 
+    this(int _) {
+        this.rawWrite = &mem_rawWrite;
+        this.flush = &mem_flush;
+    }
+
+    @property ubyte[] result() { return buffer; }
+
     private:
 
     File f;
-    void file_rawWrite(in ubyte[] block) {
-        this.f.rawWrite(block);
-    }
-    void file_flush() {
-        this.f.flush();
-    }
+    void file_rawWrite(in ubyte[] block) { this.f.rawWrite(block); }
+    void file_flush() { this.f.flush(); }
+
+    ubyte[] buffer;
+    void mem_rawWrite(in ubyte[] block) { this.buffer ~= block; }
+    void mem_flush() { }
 }
 
 const(char)[] extract_extension_lowercase(in char[] filename) {
