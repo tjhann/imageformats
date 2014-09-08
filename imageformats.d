@@ -1650,133 +1650,6 @@ ubyte[] decode_jpeg(ref JPEG_Decoder dc) {
     }
 }
 
-ubyte[] reconstruct_image_rgb(ref JPEG_Decoder dc) {
-    bool resample = false;
-    foreach (const ref comp; dc.comps[0..dc.num_comps]) {
-        if (comp.sfx != dc.hmax || comp.sfy != dc.vmax) {
-            resample = true;
-            break;
-        }
-    }
-
-    ubyte[] result = new ubyte[dc.width * dc.height * 3];
-
-    if (resample) {
-        debug(DebugJPEG) writeln("resampling...");
-        dc.upsample_nearest(result);
-        return result;
-    }
-
-    long stride = dc.num_mcu_x * dc.comps[0].sfx * 8;
-    foreach (j; 0 .. dc.height) {
-        foreach (i; 0 .. dc.width) {
-            long di = (j*dc.width + i) * 3;
-            long si = j*stride + i;
-            result[di .. di+3] = ycbcr_to_rgb(
-                dc.comps[0].data[si],
-                dc.comps[1].data[si],
-                dc.comps[2].data[si],
-            );
-        }
-    }
-    return result;
-}
-
-ubyte[] reconstruct_image_rgba(ref JPEG_Decoder dc) {
-    bool resample = false;
-    foreach (const ref comp; dc.comps[0..dc.num_comps]) {
-        if (comp.sfx != dc.hmax || comp.sfy != dc.vmax) {
-            resample = true;
-            break;
-        }
-    }
-
-    ubyte[] result = new ubyte[dc.width * dc.height * 4];
-
-    if (resample) {
-        debug(DebugJPEG) writeln("resampling...");
-        dc.upsample_nearest(result);
-        return result;
-    }
-
-    long stride = dc.num_mcu_x * dc.comps[0].sfx * 8;
-    foreach (j; 0 .. dc.height) {
-        foreach (i; 0 .. dc.width) {
-            long di = (j*dc.width + i) * 4;
-            long si = j*stride + i;
-            result[di .. di+3] = ycbcr_to_rgb(
-                dc.comps[0].data[si],
-                dc.comps[1].data[si],
-                dc.comps[2].data[si],
-            );
-            result[di+3] = 255;
-        }
-    }
-    return result;
-}
-
-void upsample_gray(ref JPEG_Decoder dc, ubyte[] result) {
-    long stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
-    double si0yratio = cast(double) dc.comps[0].y / dc.height;
-    double si0xratio = cast(double) dc.comps[0].x / dc.width;
-    long si0;
-
-    foreach (j; 0 .. dc.height) {
-        si0 = cast(long) floor(j * si0yratio) * stride0;
-        foreach (i; 0 .. dc.width) {
-            long di = (j*dc.width + i);
-            result[di] =
-                dc.comps[0].data[si0 + cast(long) floor(i * si0xratio)];
-        }
-    }
-}
-
-void upsample_gray_add_alpha(ref JPEG_Decoder dc, ubyte[] result) {
-    long stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
-    double si0yratio = cast(double) dc.comps[0].y / dc.height;
-    double si0xratio = cast(double) dc.comps[0].x / dc.width;
-    long si0, di;
-
-    foreach (j; 0 .. dc.height) {
-        si0 = cast(long) floor(j * si0yratio) * stride0;
-        foreach (i; 0 .. dc.width) {
-            result[di++] = dc.comps[0].data[si0 + cast(long) floor(i * si0xratio)];
-            result[di++] = 255;
-        }
-    }
-}
-
-void upsample_nearest(ref JPEG_Decoder dc, ubyte[] result) {
-    long stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
-    long stride1 = dc.num_mcu_x * dc.comps[1].sfx * 8;
-    long stride2 = dc.num_mcu_x * dc.comps[2].sfx * 8;
-
-    double si0yratio = cast(double) dc.comps[0].y / dc.height;
-    double si1yratio = cast(double) dc.comps[1].y / dc.height;
-    double si2yratio = cast(double) dc.comps[2].y / dc.height;
-    double si0xratio = cast(double) dc.comps[0].x / dc.width;
-    double si1xratio = cast(double) dc.comps[1].x / dc.width;
-    double si2xratio = cast(double) dc.comps[2].x / dc.width;
-    long si0, si1, si2, di;
-
-    foreach (j; 0 .. dc.height) {
-        si0 = cast(long) floor(j * si0yratio) * stride0;
-        si1 = cast(long) floor(j * si1yratio) * stride1;
-        si2 = cast(long) floor(j * si2yratio) * stride2;
-
-        foreach (i; 0 .. dc.width) {
-            result[di .. di+3] = ycbcr_to_rgb(
-                dc.comps[0].data[si0 + cast(long) floor(i * si0xratio)],
-                dc.comps[1].data[si1 + cast(long) floor(i * si1xratio)],
-                dc.comps[2].data[si2 + cast(long) floor(i * si2xratio)],
-            );
-            if (dc.tgt_chans == 4)
-                result[di+3] = 255;
-            di += dc.tgt_chans;
-        }
-    }
-}
-
 // E.2.3 and E.8 and E.9
 void decode_scan(ref JPEG_Decoder dc) {
     debug(DebugJPEG) writeln("decode scan...");
@@ -2099,6 +1972,133 @@ pure ubyte stbi__clamp(int x) {
 
 // the above is adapted from stb_image
 // ------------------------------------------------------------
+
+ubyte[] reconstruct_image_rgb(ref JPEG_Decoder dc) {
+    bool resample = false;
+    foreach (const ref comp; dc.comps[0..dc.num_comps]) {
+        if (comp.sfx != dc.hmax || comp.sfy != dc.vmax) {
+            resample = true;
+            break;
+        }
+    }
+
+    ubyte[] result = new ubyte[dc.width * dc.height * 3];
+
+    if (resample) {
+        debug(DebugJPEG) writeln("resampling...");
+        dc.upsample_nearest(result);
+        return result;
+    }
+
+    long stride = dc.num_mcu_x * dc.comps[0].sfx * 8;
+    foreach (j; 0 .. dc.height) {
+        foreach (i; 0 .. dc.width) {
+            long di = (j*dc.width + i) * 3;
+            long si = j*stride + i;
+            result[di .. di+3] = ycbcr_to_rgb(
+                dc.comps[0].data[si],
+                dc.comps[1].data[si],
+                dc.comps[2].data[si],
+            );
+        }
+    }
+    return result;
+}
+
+ubyte[] reconstruct_image_rgba(ref JPEG_Decoder dc) {
+    bool resample = false;
+    foreach (const ref comp; dc.comps[0..dc.num_comps]) {
+        if (comp.sfx != dc.hmax || comp.sfy != dc.vmax) {
+            resample = true;
+            break;
+        }
+    }
+
+    ubyte[] result = new ubyte[dc.width * dc.height * 4];
+
+    if (resample) {
+        debug(DebugJPEG) writeln("resampling...");
+        dc.upsample_nearest(result);
+        return result;
+    }
+
+    long stride = dc.num_mcu_x * dc.comps[0].sfx * 8;
+    foreach (j; 0 .. dc.height) {
+        foreach (i; 0 .. dc.width) {
+            long di = (j*dc.width + i) * 4;
+            long si = j*stride + i;
+            result[di .. di+3] = ycbcr_to_rgb(
+                dc.comps[0].data[si],
+                dc.comps[1].data[si],
+                dc.comps[2].data[si],
+            );
+            result[di+3] = 255;
+        }
+    }
+    return result;
+}
+
+void upsample_gray(ref JPEG_Decoder dc, ubyte[] result) {
+    long stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
+    double si0yratio = cast(double) dc.comps[0].y / dc.height;
+    double si0xratio = cast(double) dc.comps[0].x / dc.width;
+    long si0;
+
+    foreach (j; 0 .. dc.height) {
+        si0 = cast(long) floor(j * si0yratio) * stride0;
+        foreach (i; 0 .. dc.width) {
+            long di = (j*dc.width + i);
+            result[di] =
+                dc.comps[0].data[si0 + cast(long) floor(i * si0xratio)];
+        }
+    }
+}
+
+void upsample_gray_add_alpha(ref JPEG_Decoder dc, ubyte[] result) {
+    long stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
+    double si0yratio = cast(double) dc.comps[0].y / dc.height;
+    double si0xratio = cast(double) dc.comps[0].x / dc.width;
+    long si0, di;
+
+    foreach (j; 0 .. dc.height) {
+        si0 = cast(long) floor(j * si0yratio) * stride0;
+        foreach (i; 0 .. dc.width) {
+            result[di++] = dc.comps[0].data[si0 + cast(long) floor(i * si0xratio)];
+            result[di++] = 255;
+        }
+    }
+}
+
+void upsample_nearest(ref JPEG_Decoder dc, ubyte[] result) {
+    long stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
+    long stride1 = dc.num_mcu_x * dc.comps[1].sfx * 8;
+    long stride2 = dc.num_mcu_x * dc.comps[2].sfx * 8;
+
+    double si0yratio = cast(double) dc.comps[0].y / dc.height;
+    double si1yratio = cast(double) dc.comps[1].y / dc.height;
+    double si2yratio = cast(double) dc.comps[2].y / dc.height;
+    double si0xratio = cast(double) dc.comps[0].x / dc.width;
+    double si1xratio = cast(double) dc.comps[1].x / dc.width;
+    double si2xratio = cast(double) dc.comps[2].x / dc.width;
+    long si0, si1, si2, di;
+
+    foreach (j; 0 .. dc.height) {
+        si0 = cast(long) floor(j * si0yratio) * stride0;
+        si1 = cast(long) floor(j * si1yratio) * stride1;
+        si2 = cast(long) floor(j * si2yratio) * stride2;
+
+        foreach (i; 0 .. dc.width) {
+            result[di .. di+3] = ycbcr_to_rgb(
+                dc.comps[0].data[si0 + cast(long) floor(i * si0xratio)],
+                dc.comps[1].data[si1 + cast(long) floor(i * si1xratio)],
+                dc.comps[2].data[si2 + cast(long) floor(i * si2xratio)],
+            );
+            if (dc.tgt_chans == 4)
+                result[di+3] = 255;
+            di += dc.tgt_chans;
+        }
+    }
+}
 
 void read_jpeg_info(Reader stream, out long w, out long h, out long chans) {
     JPEG_Header hdr = read_jpeg_header(stream);
