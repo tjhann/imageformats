@@ -81,7 +81,6 @@ private:
 
 // --------------------------------------------------------------------------------
 // PNG
-// TODO finish paletted images
 
 import std.digest.crc;
 import std.zlib;
