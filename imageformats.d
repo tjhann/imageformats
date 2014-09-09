@@ -344,10 +344,28 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
     immutable int filter_step = dc.src_indexed ? 1 : dc.src_chans;
     immutable long tgt_sl_size = dc.w * dc.tgt_chans;
 
+    ubyte[] depaletted_line = dc.src_indexed ? new ubyte[dc.w * 3] : null;
     ubyte[] result = new ubyte[dc.w * dc.h * dc.tgt_chans];
 
-    void function(in ubyte[] src_line, ubyte[] tgt_line) convert;
-    convert = get_converter(dc.src_chans, dc.tgt_chans);
+    void function(in ubyte[] src_line, ubyte[] tgt_line) chan_convert;
+    chan_convert = get_converter(dc.src_chans, dc.tgt_chans);
+
+    void depalette_convert(in ubyte[] src_line, ubyte[] tgt_line) {
+        for (long s, d;  s < src_line.length;  s+=1, d+=3) {
+            long pidx = src_line[s] * 3;
+            if (dc.palette.length < pidx + 3)
+                throw new ImageIOException("palette idx wrong");
+            depaletted_line[d .. d+3] = dc.palette[pidx .. pidx+3];
+        }
+        chan_convert(depaletted_line[0 .. src_line.length*3], tgt_line);
+    }
+
+    void simple_convert(in ubyte[] src_line, ubyte[] tgt_line) {
+        chan_convert(src_line, tgt_line);
+    }
+
+    void delegate(in ubyte[] src_line, ubyte[] tgt_line) convert;
+    convert = dc.src_indexed ? &depalette_convert : &simple_convert;
 
     if (dc.ilace == InterlaceMethod.None) {
         immutable long src_sl_size = dc.w * filter_step;
