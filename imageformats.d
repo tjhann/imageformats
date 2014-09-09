@@ -341,7 +341,7 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
     dc.crc.put(dc.chunkmeta[8..12]);  // type
     bool metaready = false;     // chunk len, type, crc
 
-    immutable int filter_step = dc.src_chans; // pixel-wise step, in bytes
+    immutable int filter_step = dc.src_indexed ? 1 : dc.src_chans;
     immutable long tgt_sl_size = dc.w * dc.tgt_chans;
 
     ubyte[] result = new ubyte[dc.w * dc.h * dc.tgt_chans];
@@ -350,7 +350,7 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
     convert = get_converter(dc.src_chans, dc.tgt_chans);
 
     if (dc.ilace == InterlaceMethod.None) {
-        immutable long src_sl_size = dc.w * dc.src_chans;
+        immutable long src_sl_size = dc.w * filter_step;
         auto cline = new ubyte[src_sl_size+1];   // current line + filter byte
         auto pline = new ubyte[src_sl_size+1];   // previous line, inited to 0
         debug(DebugPNG) assert(pline[0] == 0);
@@ -397,7 +397,7 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
 
         foreach (pass; 0 .. 7) {
             const A7_Catapult tgt_px = a7_catapults[pass];   // target pixel
-            const long src_sl_size = redw[pass] * dc.src_chans;
+            const long src_sl_size = redw[pass] * filter_step;
             auto cline = cast(ubyte[]) linebuf0[0 .. src_sl_size+1];
             auto pline = cast(ubyte[]) linebuf1[0 .. src_sl_size+1];
 
