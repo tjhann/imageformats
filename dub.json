@@ -1,0 +1,8 @@
+{
+	"name": "imageformats",
+	"description": "Image formats: JPEG (no encoder), PNG, TGA. One file, no deps.",
+	"authors": ["Tero Hänninen"],
+	"license": "BSL-1.0",
+	"importPaths": ["."],
+	"targetType": "sourceLibrary"
+}
