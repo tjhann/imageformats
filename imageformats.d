@@ -2437,6 +2437,8 @@ struct Writer {
         this.flush = &file_flush;
     }
 
+    @disable this();
+
     this(int _) {
         this.rawWrite = &mem_rawWrite;
         this.flush = &mem_flush;
