@@ -120,11 +120,15 @@ public PNG_Header read_png_header(Reader stream) {
     return header;
 }
 
+public IFImage read_png(in char[] filename, long req_chans = 0) {
+    return read_png(Reader(filename), req_chans);
+}
+
 public IFImage read_png_from_mem(in ubyte[] source, long req_chans = 0) {
     return read_png(Reader(source), req_chans);
 }
 
-public IFImage read_png(Reader stream, long req_chans = 0) {
+IFImage read_png(Reader stream, long req_chans = 0) {
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
@@ -719,11 +723,15 @@ public TGA_Header read_tga_header(Reader stream) {
     return header;
 }
 
+public IFImage read_tga(in char[] filename, long req_chans = 0) {
+    return read_tga(Reader(filename), req_chans);
+}
+
 public IFImage read_tga_from_mem(in ubyte[] source, long req_chans = 0) {
     return read_tga(Reader(source), req_chans);
 }
 
-public IFImage read_tga(Reader stream, long req_chans = 0) {
+IFImage read_tga(Reader stream, long req_chans = 0) {
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
@@ -1205,11 +1213,15 @@ public JPEG_Header read_jpeg_header(Reader stream) {
     assert(0);
 }
 
+public IFImage read_jpeg(in char[] filename, long req_chans = 0) {
+    return read_jpeg(Reader(filename), req_chans);
+}
+
 public IFImage read_jpeg_from_mem(in ubyte[] source, long req_chans = 0) {
     return read_jpeg(Reader(source), req_chans);
 }
 
-public IFImage read_jpeg(Reader stream, long req_chans) {
+IFImage read_jpeg(Reader stream, long req_chans = 0) {
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 

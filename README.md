@@ -15,20 +15,20 @@ import imageformats;
 
 void main() {
     // optional last argument defines conversion
-    long w, h, chans;
-    ubyte[] pixels = read_image("peruna.png", w, h, chans);
+    IFImage im = read_image("peruna.png");
     //ubyte[] pixels = read_image("peruna.png", w, h, chans, ColFmt.YA);
     //ubyte[] pixels = read_image("peruna.png", w, h, chans, ColFmt.RGB);
 
-    write_image("peruna.tga", w, h, pixels);
-    write_image("peruna.tga", w, h, pixels, ColFmt.RGBA);
+    write_image("peruna.tga", im.w, im.h, im.pixels);
+    write_image("peruna.tga", im.w, im.h, im.pixels, ColFmt.RGBA);
 
     // get basic info without decoding
+    long w, h, chans;
     read_image_info("peruna.png", w, h, chans);
 
     // there are also format specific functions
     PNG_Header hdr = read_png_header("peruna.png"); // get detailed info
-    ubyte[] idat = read_jpeg("porkkana.jpg", w, h, chans, ColFmt.Y);
-    write_tga("porkkana.tga", w, h, idat);
+    IFImage im2 = read_jpeg("porkkana.jpg");
+    write_tga("porkkana.tga", im2.w, im2.h, im2.pixels);
 }
 ```
