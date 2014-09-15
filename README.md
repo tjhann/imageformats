@@ -16,8 +16,8 @@ import imageformats;
 void main() {
     // optional last argument defines conversion
     IFImage im = read_image("peruna.png");
-    //ubyte[] pixels = read_image("peruna.png", w, h, chans, ColFmt.YA);
-    //ubyte[] pixels = read_image("peruna.png", w, h, chans, ColFmt.RGB);
+    IFImage im2 = read_image("peruna.png", ColFmt.YA);
+    IFImage im3 = read_image("peruna.png", ColFmt.RGB);
 
     write_image("peruna.tga", im.w, im.h, im.pixels);
     write_image("peruna.tga", im.w, im.h, im.pixels, ColFmt.RGBA);
@@ -28,7 +28,7 @@ void main() {
 
     // there are also format specific functions
     PNG_Header hdr = read_png_header("peruna.png"); // get detailed info
-    IFImage im2 = read_jpeg("porkkana.jpg");
-    write_tga("porkkana.tga", im2.w, im2.h, im2.pixels);
+    IFImage im4 = read_jpeg("porkkana.jpg");
+    write_tga("porkkana.tga", im4.w, im4.h, im4.pixels);
 }
 ```
