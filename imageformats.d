@@ -179,8 +179,7 @@ public ubyte[] write_png_to_mem(long w, long h, in ubyte[] data, long tgt_chans 
     return writer.result;
 }
 
-public void write_png(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 0)
-{
+void write_png(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 0) {
     if (w < 1 || h < 1 || int.max < w || int.max < h)
         throw new ImageIOException("invalid dimensions");
     ulong src_chans = data.length / w / h;
@@ -838,8 +837,7 @@ public ubyte[] write_tga_to_mem(long w, long h, in ubyte[] data, long tgt_chans 
     return writer.result;
 }
 
-public void write_tga(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 0)
-{
+void write_tga(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 0) {
     if (w < 1 || h < 1 || ushort.max < w || ushort.max < h)
         throw new ImageIOException("invalid dimensions");
     ulong src_chans = data.length / w / h;
