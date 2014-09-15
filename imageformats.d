@@ -1,27 +1,40 @@
 // Copyright (c) 2014 Tero Hänninen
 // Boost Software License - Version 1.0 - August 17th, 2003
-module imageformats;    // version 1.0.0
+module imageformats;    // version 2.0.0
 
 import std.algorithm;   // min
 import std.bitmanip;   // endianness stuff
 import std.stdio;    // File
 import std.string;  // toLower, lastIndexOf
 
-ubyte[] read_image(in char[] file, out long w, out long h, out long chans, long reqc = 0)
-{
-    long _;
-    return read_image(file, w, h, chans, _, reqc);
+struct IFImage {
+    long        w, h;
+    ColFmt      c;
+    AlphaType   atype;
+    ubyte[]     pixels;
 }
 
-ubyte[] read_image(in char[] file, out long w, out long h, out long chans, out long a, long rc)
-{
+enum ColFmt {
+    Y = 1,
+    YA = 2,
+    RGB = 3,
+    RGBA = 4,
+}
+
+enum AlphaType {
+    Plain,
+    Premul,
+    Other
+}
+
+IFImage read_image(in char[] file, long req_chans = 0) {
     const(char)[] ext = extract_extension_lowercase(file);
 
     if (ext in register) {
         ImageIOFuncs funcs = register[ext];
         if (funcs.read_image is null)
             throw new ImageIOException("null function pointer");
-        return funcs.read_image(Reader(file), w, h, chans, a, rc);
+        return funcs.read_image(Reader(file), req_chans);
     }
 
     throw new ImageIOException("unknown image extension/type");
@@ -54,19 +67,6 @@ void read_image_info(in char[] filename, out long w, out long h, out long chans)
     }
 
     throw new ImageIOException("unknown image extension/type");
-}
-
-enum ColFmt {
-    Y = 1,
-    YA = 2,
-    RGB = 3,
-    RGBA = 4,
-}
-
-enum AlphaType {
-    Plain,
-    Premul,
-    Other
 }
 
 class ImageIOException : Exception {
@@ -120,22 +120,11 @@ public PNG_Header read_png_header(Reader stream) {
     return header;
 }
 
-public ubyte[] read_png(in char[] file, out long w, out long h, out long chans,
-                                                            long req_chans = 0)
-{
-    long _;
-    return read_png(Reader(file), w, h, chans, _, req_chans);
+public IFImage read_png_from_mem(in ubyte[] source, long req_chans = 0) {
+    return read_png(Reader(source), req_chans);
 }
 
-public ubyte[] read_png_from_mem(in ubyte[] source, out long w, out long h,
-                            out long chans, out long a, long req_chans = 0)
-{
-    return read_png(Reader(source), w, h, chans, a, req_chans);
-}
-
-public ubyte[] read_png(Reader stream, out long w, out long h, out long chans, out long a,
-                                                                           long req_chans)
-{
+public IFImage read_png(Reader stream, long req_chans = 0) {
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
@@ -165,11 +154,14 @@ public ubyte[] read_png(Reader stream, out long w, out long h, out long chans, o
     };
     dc.tgt_chans = (req_chans == 0) ? dc.src_chans : cast(int) req_chans;
 
-    w = dc.w;
-    h = dc.h;
-    chans = dc.tgt_chans;
-    a = AlphaType.Plain;
-    return decode_png(dc);
+    IFImage result = {
+        w      : dc.w,
+        h      : dc.h,
+        c      : cast(ColFmt) dc.tgt_chans,
+        atype  : AlphaType.Plain,
+        pixels : decode_png(dc)
+    };
+    return result;
 }
 
 public void write_png(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
@@ -727,20 +719,11 @@ public TGA_Header read_tga_header(Reader stream) {
     return header;
 }
 
-public ubyte[] read_tga(in char[] file, out long w, out long h, out long chans, long rc) {
-    long _;
-    return read_tga(Reader(file), w, h, chans, _, rc);
+public IFImage read_tga_from_mem(in ubyte[] source, long req_chans = 0) {
+    return read_tga(Reader(source), req_chans);
 }
 
-public ubyte[] read_tga_from_mem(in ubyte[] source, out long w, out long h,
-                            out long chans, out long a, long req_chans = 0)
-{
-    return read_tga(Reader(source), w, h, chans, a, req_chans);
-}
-
-public ubyte[] read_tga(Reader stream, out long w, out long h, out long chans, out long a,
-                                                                           long req_chans)
-{
+public IFImage read_tga(Reader stream, long req_chans = 0) {
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
@@ -806,16 +789,18 @@ public ubyte[] read_tga(Reader stream, out long w, out long h, out long chans, o
         default: throw new ImageIOException("TGA: format not supported");
     }
 
-    w = cast(int) dc.w;
-    h = cast(int) dc.h;
-    chans = dc.tgt_chans;
-    ubyte[] pixels = decode_tga(dc);
+    IFImage result = {
+        w      : dc.w,
+        h      : dc.h,
+        c      : cast(ColFmt) dc.tgt_chans,
+        atype  : AlphaType.Plain, // guess it's plain alpha if can't fetch it
+        pixels : decode_tga(dc),
+    };
 
     if (dc.src_fmt != _ColFmt.YA && dc.src_fmt != _ColFmt.BGRA)
-        return pixels;
+        return result;
 
     // fetch attribute type (plain/premultiplied/undefined alpha)
-    a = AlphaType.Plain; // guess it's plain alpha if can't fetch it
     try {
         ubyte[26] ftr = void;
         stream.seek(-26, SEEK_END);
@@ -825,13 +810,13 @@ public ubyte[] read_tga(Reader stream, out long w, out long h, out long chans, o
             stream.seek(extarea + 494, SEEK_SET);
             stream.readExact(ftr, 1);
             switch (ftr[0]) {
-                case 3: a = AlphaType.Plain; break;
-                case 4: a = AlphaType.Premul; break;
-                default: a = AlphaType.Other; break;
+                case 3: result.atype = AlphaType.Plain; break;
+                case 4: result.atype = AlphaType.Premul; break;
+                default: result.atype = AlphaType.Other; break;
             }
         }
     } catch { }
-    return pixels;
+    return result;
 }
 
 public void write_tga(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
@@ -1220,22 +1205,11 @@ public JPEG_Header read_jpeg_header(Reader stream) {
     assert(0);
 }
 
-public ubyte[] read_jpeg(in char[] file, out long w, out long h, out long chans,
-                                                            long req_chans = 0)
-{
-    long _;
-    return read_jpeg(Reader(file), w, h, chans, _, req_chans);
+public IFImage read_jpeg_from_mem(in ubyte[] source, long req_chans = 0) {
+    return read_jpeg(Reader(source), req_chans);
 }
 
-public ubyte[] read_jpeg_from_mem(in ubyte[] source, out long w, out long h,
-                            out long chans, out long a, long req_chans = 0)
-{
-    return read_jpeg(Reader(source), w, h, chans, a, req_chans);
-}
-
-public ubyte[] read_jpeg(Reader stream, out long w, out long h, out long chans, out long a,
-                                                                            long req_chans)
-{
+public IFImage read_jpeg(Reader stream, long req_chans) {
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
@@ -1269,11 +1243,14 @@ public ubyte[] read_jpeg(Reader stream, out long w, out long h, out long chans, 
 
     dc.tgt_chans = (req_chans == 0) ? dc.num_comps : cast(int) req_chans;
 
-    w = dc.width;
-    h = dc.height;
-    chans = dc.tgt_chans;
-    a = AlphaType.Plain;
-    return decode_jpeg(dc);
+    IFImage result = {
+        w      : dc.width,
+        h      : dc.height,
+        c      : cast(ColFmt) dc.tgt_chans,
+        atype  : AlphaType.Plain,
+        pixels : decode_jpeg(dc),
+    };
+    return result;
 }
 
 struct JPEG_Decoder {
@@ -2465,7 +2442,7 @@ const(char)[] extract_extension_lowercase(in char[] filename) {
 immutable ImageIOFuncs[string] register;
 
 struct ImageIOFuncs {
-    ubyte[] function(Reader s, out long w, out long h, out long c, out long a, long r) read_image;
+    IFImage function(Reader s, long req_chans) read_image;
     void function(Writer s, long w, long h, in ubyte[] data, long req_chans) write_image;
     void function(Reader s, out long w, out long h, out long c) read_info;
 }
