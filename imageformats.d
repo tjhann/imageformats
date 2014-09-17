@@ -34,7 +34,8 @@ IFImage read_image(in char[] file, long req_chans = 0) {
         ImageIOFuncs funcs = register[ext];
         if (funcs.read_image is null)
             throw new ImageIOException("null function pointer");
-        return funcs.read_image(Reader(file), req_chans);
+        scope reader = new Reader(file);
+        return funcs.read_image(reader, req_chans);
     }
 
     throw new ImageIOException("unknown image extension/type");
@@ -47,7 +48,8 @@ void write_image(in char[] filename, long w, long h, in ubyte[] data, int req_ch
         ImageIOFuncs funcs = register[ext];
         if (funcs.write_image is null)
             throw new ImageIOException("null function pointer");
-        funcs.write_image(Writer(filename), w, h, data, req_chans);
+        scope writer = new Writer(filename);
+        funcs.write_image(writer, w, h, data, req_chans);
         return;
     }
 
@@ -62,7 +64,8 @@ void read_image_info(in char[] filename, out long w, out long h, out long chans)
         ImageIOFuncs funcs = register[ext];
         if (funcs.read_info is null)
             throw new ImageIOException("null function pointer");
-        funcs.read_info(Reader(filename), w, h, chans);
+        scope reader = new Reader(filename);
+        funcs.read_info(reader, w, h, chans);
         return;
     }
 
@@ -96,10 +99,11 @@ public struct PNG_Header {
 }
 
 public PNG_Header read_png_header(in char[] filename) {
-    return read_png_header(Reader(filename));
+    scope reader = new Reader(filename);
+    return read_png_header(reader);
 }
 
-public PNG_Header read_png_header(Reader stream) {
+PNG_Header read_png_header(Reader stream) {
     ubyte[33] tmp = void;  // file header, IHDR len+type+data+crc
     stream.readExact(tmp, tmp.length);
 
@@ -121,11 +125,13 @@ public PNG_Header read_png_header(Reader stream) {
 }
 
 public IFImage read_png(in char[] filename, long req_chans = 0) {
-    return read_png(Reader(filename), req_chans);
+    scope reader = new Reader(filename);
+    return read_png(reader, req_chans);
 }
 
 public IFImage read_png_from_mem(in ubyte[] source, long req_chans = 0) {
-    return read_png(Reader(source), req_chans);
+    scope reader = new Reader(source);
+    return read_png(reader, req_chans);
 }
 
 IFImage read_png(Reader stream, long req_chans = 0) {
@@ -170,11 +176,12 @@ IFImage read_png(Reader stream, long req_chans = 0) {
 
 public void write_png(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
 {
-    write_png(Writer(file), w, h, data, tgt_chans);
+    scope writer = new Writer(file);
+    write_png(writer, w, h, data, tgt_chans);
 }
 
 public ubyte[] write_png_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
-    auto writer = Writer(0);
+    scope writer = new Writer();
     write_png(writer, w, h, data, tgt_chans);
     return writer.result;
 }
@@ -698,10 +705,11 @@ public struct TGA_Header {
 }
 
 public TGA_Header read_tga_header(in char[] filename) {
-    return read_tga_header(Reader(filename));
+    scope reader = new Reader(filename);
+    return read_tga_header(reader);
 }
 
-public TGA_Header read_tga_header(Reader stream) {
+TGA_Header read_tga_header(Reader stream) {
     ubyte[18] tmp = void;
     stream.readExact(tmp, tmp.length);
 
@@ -723,11 +731,13 @@ public TGA_Header read_tga_header(Reader stream) {
 }
 
 public IFImage read_tga(in char[] filename, long req_chans = 0) {
-    return read_tga(Reader(filename), req_chans);
+    scope reader = new Reader(filename);
+    return read_tga(reader, req_chans);
 }
 
 public IFImage read_tga_from_mem(in ubyte[] source, long req_chans = 0) {
-    return read_tga(Reader(source), req_chans);
+    scope reader = new Reader(source);
+    return read_tga(reader, req_chans);
 }
 
 IFImage read_tga(Reader stream, long req_chans = 0) {
@@ -828,11 +838,12 @@ IFImage read_tga(Reader stream, long req_chans = 0) {
 
 public void write_tga(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
 {
-    write_tga(Writer(file), w, h, data, tgt_chans);
+    scope writer = new Writer(file);
+    write_tga(writer, w, h, data, tgt_chans);
 }
 
 public ubyte[] write_tga_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
-    auto writer = Writer(0);
+    scope writer = new Writer();
     write_tga(writer, w, h, data, tgt_chans);
     return writer.result;
 }
@@ -1147,10 +1158,11 @@ public struct JPEG_Header {    // JFIF
 }
 
 public JPEG_Header read_jpeg_header(in char[] filename) {
-    return read_jpeg_header(Reader(filename));
+    scope reader = new Reader(filename);
+    return read_jpeg_header(reader);
 }
 
-public JPEG_Header read_jpeg_header(Reader stream) {
+JPEG_Header read_jpeg_header(Reader stream) {
     ubyte[20 + 8] tmp = void;   // SOI, APP0 + SOF0
     stream.readExact(tmp, 20);
 
@@ -1212,11 +1224,13 @@ public JPEG_Header read_jpeg_header(Reader stream) {
 }
 
 public IFImage read_jpeg(in char[] filename, long req_chans = 0) {
-    return read_jpeg(Reader(filename), req_chans);
+    scope reader = new Reader(filename);
+    return read_jpeg(reader, req_chans);
 }
 
 public IFImage read_jpeg_from_mem(in ubyte[] source, long req_chans = 0) {
-    return read_jpeg(Reader(source), req_chans);
+    scope reader = new Reader(source);
+    return read_jpeg(reader, req_chans);
 }
 
 IFImage read_jpeg(Reader stream, long req_chans = 0) {
@@ -2347,7 +2361,7 @@ void BGRA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
 
 // --------------------------------------------------------------------------------
 
-struct Reader {
+class Reader {
     const void delegate(ubyte[], size_t) readExact;
     const void delegate(long, int) seek;
 
@@ -2360,6 +2374,7 @@ struct Reader {
         this.f = f;
         this.readExact = &file_readExact;
         this.seek = &file_seek;
+        this.source = null;
     }
 
     this(in ubyte[] source) {
@@ -2409,7 +2424,7 @@ struct Reader {
     }
 }
 
-struct Writer {
+class Writer {
     const void delegate(in ubyte[]) rawWrite;
     const void delegate() flush;
 
@@ -2424,9 +2439,7 @@ struct Writer {
         this.flush = &file_flush;
     }
 
-    @disable this();
-
-    this(int _) {
+    this() {
         this.rawWrite = &mem_rawWrite;
         this.flush = &mem_flush;
     }
