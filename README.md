@@ -10,7 +10,6 @@
 
 **Let me show you:**
 ```D
-import std.stdio;   // File
 import imageformats;
 
 void main() {
