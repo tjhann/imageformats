@@ -200,9 +200,9 @@ void write_png(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 
         w         : cast(int) w,
         h         : cast(int) h,
         src_chans : cast(int) src_chans,
+        tgt_chans : cast(int) ((tgt_chans) ? tgt_chans : src_chans),
         data      : data,
     };
-    ec.tgt_chans = (tgt_chans) ? cast(int) tgt_chans : ec.src_chans;
 
     write_png(ec);
     stream.flush();
@@ -862,10 +862,10 @@ void write_tga(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 
         w         : cast(ushort) w,
         h         : cast(ushort) h,
         src_chans : cast(int) src_chans,
+        tgt_chans : cast(int) ((tgt_chans) ? tgt_chans : src_chans),
         rle       : true,
         data      : data,
     };
-    ec.tgt_chans = (tgt_chans) ? cast(int) tgt_chans : ec.src_chans;
 
     write_tga(ec);
     stream.flush();
