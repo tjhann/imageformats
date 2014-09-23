@@ -918,21 +918,18 @@ ubyte[] decode_tga(ref TGA_Decoder dc) {
                 its_rle = cast(bool) (rbuf[0] & 0x80);
                 plen = ((rbuf[0] & 0x7f) + 1) * dc.bytes_pp; // length in bytes
             }
-            long gotten = src_linesize - wanted;
+            const long gotten = src_linesize - wanted;
+            const long copysize = min(plen, wanted);
             if (its_rle) {
                 dc.stream.readExact(rbuf, dc.bytes_pp);
-                long copysize = min(plen, wanted);
                 for (long p = gotten; p < gotten+copysize; p += dc.bytes_pp)
                     src_line[p .. p+dc.bytes_pp] = rbuf[0 .. dc.bytes_pp];
-                wanted -= copysize;
-                plen -= copysize;
             } else {    // it's raw
-                long copysize = min(plen, wanted);
                 auto slice = src_line[gotten .. gotten+copysize];
                 dc.stream.readExact(slice, copysize);
-                wanted -= copysize;
-                plen -= copysize;
             }
+            wanted -= copysize;
+            plen -= copysize;
         }
 
         convert(src_line, result[ti .. ti + tgt_linesize]);
