@@ -1047,7 +1047,6 @@ ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bytes_p
         if (runlen < rle_limit) {
             // data goes to raw packet
             rawlen += runlen;
-            runlen = 0;
             if (128 <= rawlen) {     // full packet, need to store it
                 long copysize = 128 * bytes_pp;
                 tgt_cmp[cmp_i++] = 0x7f; // raw packet header
@@ -1074,7 +1073,6 @@ ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bytes_p
             tgt_cmp[cmp_i .. cmp_i+bytes_pp] = px[0..$];       // packet data
             cmp_i += bytes_pp;
             raw_i = i;
-            runlen = 0;
         }
     }   // for
 
@@ -1083,7 +1081,6 @@ ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bytes_p
         tgt_cmp[cmp_i++] = cast(ubyte) (rawlen-1); // raw packet header
         tgt_cmp[cmp_i .. cmp_i+copysize] = line[raw_i .. raw_i+copysize];
         cmp_i += copysize;
-        rawlen = 0;
     }
     return tgt_cmp[0 .. cmp_i];
 }
