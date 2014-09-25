@@ -348,8 +348,7 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
     ubyte[] depaletted_line = dc.src_indexed ? new ubyte[dc.w * 3] : null;
     ubyte[] result = new ubyte[dc.w * dc.h * dc.tgt_chans];
 
-    const void function(in ubyte[] src_line, ubyte[] tgt_line)
-        chan_convert = get_converter(dc.src_chans, dc.tgt_chans);
+    const chan_convert = get_converter(dc.src_chans, dc.tgt_chans);
 
     void depalette_convert(in ubyte[] src_line, ubyte[] tgt_line) {
         for (long s, d;  s < src_line.length;  s+=1, d+=3) {
@@ -365,8 +364,7 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
         chan_convert(src_line, tgt_line);
     }
 
-    const void delegate(in ubyte[] src_line, ubyte[] tgt_line)
-        convert = dc.src_indexed ? &depalette_convert : &simple_convert;
+    const convert = dc.src_indexed ? &depalette_convert : &simple_convert;
 
     if (dc.ilace == InterlaceMethod.None) {
         immutable long src_sl_size = dc.w * filter_step;
