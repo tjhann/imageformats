@@ -272,6 +272,7 @@ ubyte[] decode_png(ref PNG_Decoder dc) {
                 if (! (stage == Stage.IHDR_parsed ||
                       (stage == Stage.PLTE_parsed && dc.src_indexed)) )
                     throw new ImageIOException("corrupt chunk stream");
+                dc.crc.put(dc.chunkmeta[8..12]);  // type
                 result = read_IDAT_stream(dc, len);
                 stage = Stage.IDAT_parsed;
                 break;
@@ -339,7 +340,6 @@ enum InterlaceMethod {
 }
 
 ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
-    dc.crc.put(dc.chunkmeta[8..12]);  // type
     bool metaready = false;     // chunk len, type, crc
 
     immutable int filter_step = dc.src_indexed ? 1 : dc.src_chans;
