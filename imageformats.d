@@ -407,16 +407,16 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
             (dc.h + 0) / 2,
         ];
 
-        const long max_scanline_size = dc.w * dc.src_chans;
+        const long max_scanline_size = dc.w * filter_step;
         const linebuf0 = new ubyte[max_scanline_size+1]; // +1 for filter type byte
         const linebuf1 = new ubyte[max_scanline_size+1]; // +1 for filter type byte
         auto redlinebuf = new ubyte[dc.w * dc.tgt_chans];
 
         foreach (pass; 0 .. 7) {
             const A7_Catapult tgt_px = a7_catapults[pass];   // target pixel
-            const long src_sl_size = redw[pass] * filter_step;
-            auto cline = cast(ubyte[]) linebuf0[0 .. src_sl_size+1];
-            auto pline = cast(ubyte[]) linebuf1[0 .. src_sl_size+1];
+            const long src_linesize = redw[pass] * filter_step;
+            auto cline = cast(ubyte[]) linebuf0[0 .. src_linesize+1];
+            auto pline = cast(ubyte[]) linebuf1[0 .. src_linesize+1];
 
             foreach (j; 0 .. redh[pass]) {
                 uncompress_line(dc, len, metaready, cline);
@@ -425,7 +425,7 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
                 recon(cline[1..$], pline[1..$], filter_type, filter_step);
                 convert(cline[1 .. $], redlinebuf[0 .. redw[pass]*dc.tgt_chans]);
 
-                for (int i, redi; i < redw[pass]; ++i, redi += dc.tgt_chans) {
+                for (long i, redi; i < redw[pass]; ++i, redi += dc.tgt_chans) {
                     long tgt = tgt_px(i, j, dc.w) * dc.tgt_chans;
                     result[tgt .. tgt + dc.tgt_chans] =
                         redlinebuf[redi .. redi + dc.tgt_chans];
