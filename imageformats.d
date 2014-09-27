@@ -1,6 +1,6 @@
 // Copyright (c) 2014 Tero Hänninen
 // Boost Software License - Version 1.0 - August 17th, 2003
-module imageformats;    // version 2.0.0
+module imageformats;    // version 2.0.1
 
 import std.algorithm;   // min
 import std.bitmanip;   // endianness stuff
