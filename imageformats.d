@@ -1776,7 +1776,7 @@ immutable ubyte[64] dezigzag = [
 short[64] decode_block(ref JPEG_Decoder dc, ref JPEG_Decoder.Component comp,
                                                     in ref ubyte[64] qtable)
 {
-    short[64] res;
+    short[64] res = 0;
 
     ubyte t = decode_huff(dc, dc.dc_tables[comp.dc_table]);
     int diff = t ? dc.receive_and_extend(t) : 0;
@@ -1784,7 +1784,6 @@ short[64] decode_block(ref JPEG_Decoder dc, ref JPEG_Decoder.Component comp,
     comp.pred = comp.pred + diff;
     res[0] = cast(short) (comp.pred * qtable[0]);
 
-    res[1..64] = 0;
     int k = 1;
     do {
         ubyte rs = decode_huff(dc, dc.ac_tables[comp.ac_table]);
@@ -1847,11 +1846,8 @@ ubyte nextbit(ref JPEG_Decoder dc) {
         dc.bits_left = 8;
 
         if (dc.cb == 0xff) {
-            ubyte b2;
             dc.stream.readExact(bytebuf, 1);
-            b2 = bytebuf[0];
-
-            if (b2 != 0x0) {
+            if (bytebuf[0] != 0x0) {
                 throw new ImageIOException("unexpected marker");
             }
         }
@@ -1865,7 +1861,7 @@ ubyte nextbit(ref JPEG_Decoder dc) {
 
 ubyte clamp(float x) pure {
     if (x < 0) return 0;
-    else if (255 < x) return 255;
+    if (255 < x) return 255;
     return cast(ubyte) x;
 }
 
