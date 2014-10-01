@@ -1795,7 +1795,7 @@ ubyte nextbit(ref JPEG_Decoder dc) {
     return r;
 }
 
-ubyte[] reconstruct(ref JPEG_Decoder dc) {
+ubyte[] reconstruct(in ref JPEG_Decoder dc) {
     auto result = new ubyte[dc.width * dc.height * dc.tgt_chans];
 
     switch (dc.num_comps * 10 + dc.tgt_chans) {
@@ -1861,7 +1861,7 @@ ubyte[] reconstruct(ref JPEG_Decoder dc) {
     }
 }
 
-ubyte[] upsample_gray(ref JPEG_Decoder dc, ubyte[] result) {
+ubyte[] upsample_gray(in ref JPEG_Decoder dc, ubyte[] result) {
     const long stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
     const double si0yratio = cast(double) dc.comps[0].y / dc.height;
     const double si0xratio = cast(double) dc.comps[0].x / dc.width;
@@ -1879,7 +1879,7 @@ ubyte[] upsample_gray(ref JPEG_Decoder dc, ubyte[] result) {
     return result;
 }
 
-ubyte[] upsample_rgb(ref JPEG_Decoder dc, ubyte[] result) {
+ubyte[] upsample_rgb(in ref JPEG_Decoder dc, ubyte[] result) {
     const long stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
     const long stride1 = dc.num_mcu_x * dc.comps[1].sfx * 8;
     const long stride2 = dc.num_mcu_x * dc.comps[2].sfx * 8;
