@@ -1624,8 +1624,7 @@ ubyte[] decode_jpeg(ref JPEG_Decoder dc) {
 
     immutable conversion = dc.num_comps * 10 + dc.tgt_chans;
     switch (conversion) {
-        case 34: return dc.reconstruct_image_rgba();
-        case 33: return dc.reconstruct_image_rgb();
+        case 34, 33: return dc.reconstruct_image_rgb();
         case 32, 12:
             auto comp = &dc.comps[0];
             auto result = new ubyte[dc.width * dc.height * 2];
@@ -1663,26 +1662,16 @@ ubyte[] decode_jpeg(ref JPEG_Decoder dc) {
                 dc.upsample_gray(result);
                 return result;
             }
-        case 14:
-            auto result = new ubyte[dc.width * dc.height * 4];
+        case 14, 13:
+            auto result = new ubyte[dc.width * dc.height * dc.tgt_chans];
             long di;
             foreach (j; 0 .. dc.height) {
                 long si = j * dc.num_mcu_x * dc.comps[0].sfx * 8;
                 foreach (i; 0 .. dc.width) {
                     result[di .. di+3] = dc.comps[0].data[si++];
-                    result[di+3] = 255;
-                    di += 4;
-                }
-            }
-            return result;
-        case 13:
-            auto result = new ubyte[dc.width * dc.height * 3];
-            long di;
-            foreach (j; 0 .. dc.height) {
-                long si = j * dc.num_mcu_x * dc.comps[0].sfx * 8;
-                foreach (i; 0 .. dc.width) {
-                    result[di .. di+3] = dc.comps[0].data[si++];
-                    di += 3;
+                    if (dc.tgt_chans == 4)
+                        result[di+3] = 255;
+                    di += dc.tgt_chans;
                 }
             }
             return result;
@@ -2018,7 +2007,7 @@ ubyte[] reconstruct_image_rgb(ref JPEG_Decoder dc) {
         }
     }
 
-    ubyte[] result = new ubyte[dc.width * dc.height * 3];
+    ubyte[] result = new ubyte[dc.width * dc.height * dc.tgt_chans];
 
     if (resample) {
         debug(DebugJPEG) writeln("resampling...");
@@ -2029,46 +2018,15 @@ ubyte[] reconstruct_image_rgb(ref JPEG_Decoder dc) {
     long stride = dc.num_mcu_x * dc.comps[0].sfx * 8;
     foreach (j; 0 .. dc.height) {
         foreach (i; 0 .. dc.width) {
-            long di = (j*dc.width + i) * 3;
+            long di = (j*dc.width + i) * dc.tgt_chans;
             long si = j*stride + i;
             result[di .. di+3] = ycbcr_to_rgb(
                 dc.comps[0].data[si],
                 dc.comps[1].data[si],
                 dc.comps[2].data[si],
             );
-        }
-    }
-    return result;
-}
-
-ubyte[] reconstruct_image_rgba(ref JPEG_Decoder dc) {
-    bool resample = false;
-    foreach (const ref comp; dc.comps[0..dc.num_comps]) {
-        if (comp.sfx != dc.hmax || comp.sfy != dc.vmax) {
-            resample = true;
-            break;
-        }
-    }
-
-    ubyte[] result = new ubyte[dc.width * dc.height * 4];
-
-    if (resample) {
-        debug(DebugJPEG) writeln("resampling...");
-        dc.upsample_nearest(result);
-        return result;
-    }
-
-    long stride = dc.num_mcu_x * dc.comps[0].sfx * 8;
-    foreach (j; 0 .. dc.height) {
-        foreach (i; 0 .. dc.width) {
-            long di = (j*dc.width + i) * 4;
-            long si = j*stride + i;
-            result[di .. di+3] = ycbcr_to_rgb(
-                dc.comps[0].data[si],
-                dc.comps[1].data[si],
-                dc.comps[2].data[si],
-            );
-            result[di+3] = 255;
+            if (dc.tgt_chans == 4)
+                result[di+3] = 255;
         }
     }
     return result;
