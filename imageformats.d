@@ -1,6 +1,6 @@
 // Copyright (c) 2014 Tero Hänninen
 // Boost Software License - Version 1.0 - August 17th, 2003
-module imageformats;    // version 2.0.2
+module imageformats;    // version 3.0.2
 
 import std.algorithm;   // min
 import std.bitmanip;   // endianness stuff
@@ -10,7 +10,6 @@ import std.string;  // toLower, lastIndexOf
 struct IFImage {
     long        w, h;
     ColFmt      c;
-    AlphaType   atype;
     ubyte[]     pixels;
 }
 
@@ -19,12 +18,6 @@ enum ColFmt {
     YA = 2,
     RGB = 3,
     RGBA = 4,
-}
-
-enum AlphaType {
-    Plain,
-    Premul,
-    Other
 }
 
 IFImage read_image(in char[] file, long req_chans = 0) {
@@ -168,7 +161,6 @@ IFImage read_png(Reader stream, long req_chans = 0) {
         w      : dc.w,
         h      : dc.h,
         c      : cast(ColFmt) dc.tgt_chans,
-        atype  : AlphaType.Plain,
         pixels : decode_png(dc)
     };
     return result;
@@ -808,29 +800,8 @@ IFImage read_tga(Reader stream, long req_chans = 0) {
         w      : dc.w,
         h      : dc.h,
         c      : cast(ColFmt) dc.tgt_chans,
-        atype  : AlphaType.Plain, // guess it's plain alpha if can't fetch it
         pixels : decode_tga(dc),
     };
-
-    if (dc.src_fmt != _ColFmt.YA && dc.src_fmt != _ColFmt.BGRA)
-        return result;
-
-    // fetch attribute type (plain/premultiplied/undefined alpha)
-    try {
-        ubyte[26] ftr = void;
-        stream.seek(-26, SEEK_END);
-        stream.readExact(ftr, 26);
-        if (ftr[8..26] == tga_footer_sig) {
-            uint extarea = littleEndianToNative!uint(ftr[0..4]);
-            stream.seek(extarea + 494, SEEK_SET);
-            stream.readExact(ftr, 1);
-            switch (ftr[0]) {
-                case 3: result.atype = AlphaType.Plain; break;
-                case 4: result.atype = AlphaType.Premul; break;
-                default: result.atype = AlphaType.Other; break;
-            }
-        }
-    } catch { }
     return result;
 }
 
@@ -1263,7 +1234,6 @@ IFImage read_jpeg(Reader stream, long req_chans = 0) {
         w      : dc.width,
         h      : dc.height,
         c      : cast(ColFmt) dc.tgt_chans,
-        atype  : AlphaType.Plain,
         pixels : decode_jpeg(dc),
     };
     return result;
