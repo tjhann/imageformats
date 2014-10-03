@@ -1,6 +1,6 @@
 // Copyright (c) 2014 Tero Hänninen
 // Boost Software License - Version 1.0 - August 17th, 2003
-module imageformats;    // version 3.0.2
+module imageformats;    // version 3.0.3
 
 import std.algorithm;   // min
 import std.bitmanip;   // endianness stuff
@@ -34,7 +34,7 @@ IFImage read_image(in char[] file, long req_chans = 0) {
     throw new ImageIOException("unknown image extension/type");
 }
 
-void write_image(in char[] filename, long w, long h, in ubyte[] data, int req_chans = 0) {
+void write_image(in char[] filename, long w, long h, in ubyte[] data, long req_chans = 0) {
     const(char)[] ext = extract_extension_lowercase(filename);
 
     if (ext in register) {
@@ -178,28 +178,6 @@ public ubyte[] write_png_to_mem(long w, long h, in ubyte[] data, long tgt_chans 
     return writer.result;
 }
 
-void write_png(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 0) {
-    if (w < 1 || h < 1 || int.max < w || int.max < h)
-        throw new ImageIOException("invalid dimensions");
-    ulong src_chans = data.length / w / h;
-    if (src_chans < 1 || 4 < src_chans || tgt_chans < 0 || 4 < tgt_chans)
-        throw new ImageIOException("invalid channel count");
-    if (src_chans * w * h != data.length)
-        throw new ImageIOException("mismatching dimensions and length");
-
-    PNG_Encoder ec = {
-        stream    : stream,
-        w         : cast(int) w,
-        h         : cast(int) h,
-        src_chans : cast(int) src_chans,
-        tgt_chans : cast(int) ((tgt_chans) ? tgt_chans : src_chans),
-        data      : data,
-    };
-
-    write_png(ec);
-    stream.flush();
-}
-
 immutable ubyte[8] png_file_header =
     [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -212,7 +190,7 @@ int channels(PNG_ColorType ct) pure nothrow {
     }
 }
 
-PNG_ColorType color_type(int channels) pure nothrow {
+PNG_ColorType color_type(long channels) pure nothrow {
     switch (channels) {
         case 1: return PNG_ColorType.Y;
         case 2: return PNG_ColorType.YA;
@@ -335,12 +313,12 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
     bool metaready = false;     // chunk len, type, crc
 
     immutable int filter_step = dc.src_indexed ? 1 : dc.src_chans;
-    immutable long tgt_sl_size = dc.w * dc.tgt_chans;
+    immutable long tgt_linesize = dc.w * dc.tgt_chans;
 
     ubyte[] depaletted_line = dc.src_indexed ? new ubyte[dc.w * 3] : null;
     ubyte[] result = new ubyte[dc.w * dc.h * dc.tgt_chans];
 
-    const chan_convert = get_converter(dc.src_chans, dc.tgt_chans);
+    const LineConv chan_convert = get_converter(dc.src_chans, dc.tgt_chans);
 
     void depalette_convert(in ubyte[] src_line, ubyte[] tgt_line) {
         for (long s, d;  s < src_line.length;  s+=1, d+=3) {
@@ -370,8 +348,8 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
             ubyte filter_type = cline[0];
 
             recon(cline[1..$], pline[1..$], filter_type, filter_step);
-            convert(cline[1 .. $], result[tgt_si .. tgt_si + tgt_sl_size]);
-            tgt_si += tgt_sl_size;
+            convert(cline[1 .. $], result[tgt_si .. tgt_si + tgt_linesize]);
+            tgt_si += tgt_linesize;
 
             ubyte[] _swap = pline;
             pline = cline;
@@ -558,11 +536,33 @@ ubyte paeth(ubyte a, ubyte b, ubyte c) pure nothrow {
 // ----------------------------------------------------------------------
 // PNG encoder
 
+void write_png(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 0) {
+    if (w < 1 || h < 1 || int.max < w || int.max < h)
+        throw new ImageIOException("invalid dimensions");
+    long src_chans = data.length / w / h;
+    if (src_chans < 1 || 4 < src_chans || tgt_chans < 0 || 4 < tgt_chans)
+        throw new ImageIOException("invalid channel count");
+    if (src_chans * w * h != data.length)
+        throw new ImageIOException("mismatching dimensions and length");
+
+    PNG_Encoder ec = {
+        stream    : stream,
+        w         : w,
+        h         : h,
+        src_chans : src_chans,
+        tgt_chans : tgt_chans ? tgt_chans : src_chans,
+        data      : data,
+    };
+
+    write_png(ec);
+    stream.flush();
+}
+
 struct PNG_Encoder {
     Writer stream;
-    int w, h;
-    int src_chans;
-    int tgt_chans;
+    long w, h;
+    long src_chans;
+    long tgt_chans;
     const(ubyte)[] data;
 
     CRC32 crc;
@@ -609,16 +609,15 @@ void write_IDATs(ref PNG_Encoder ec) {
     ubyte[] filtered_line = new ubyte[linesize];
     ubyte[] filtered_image;
 
-    const void function(in ubyte[] src_line, ubyte[] tgt_line)
-        convert = get_converter(ec.src_chans, ec.tgt_chans);
+    const LineConv convert = get_converter(ec.src_chans, ec.tgt_chans);
 
-    immutable int filter_step = ec.tgt_chans;   // step between pixels, in bytes
-    immutable long src_line_size = ec.w * ec.src_chans;
+    immutable long filter_step = ec.tgt_chans;   // step between pixels, in bytes
+    immutable long src_linesize = ec.w * ec.src_chans;
 
     long si = 0;
     foreach (j; 0 .. ec.h) {
-        convert(ec.data[si .. si+src_line_size], cline[1..$]);
-        si += src_line_size;
+        convert(ec.data[si .. si+src_linesize], cline[1..$]);
+        si += src_linesize;
 
         foreach (i; 1 .. filter_step+1)
             filtered_line[i] = cast(ubyte) (cline[i] - paeth(0, pline[i], 0));
@@ -860,8 +859,7 @@ ubyte[] decode_tga(ref TGA_Decoder dc) {
     immutable long tgt_stride = (dc.origin_at_top) ? tgt_linesize : -tgt_linesize;
     long ti                   = (dc.origin_at_top) ? 0 : (dc.h-1) * tgt_linesize;
 
-    void function(in ubyte[] src_line, ubyte[] tgt_line) convert;
-    convert = get_converter(dc.src_fmt, dc.tgt_chans);
+    const LineConv convert = get_converter(dc.src_fmt, dc.tgt_chans);
 
     if (!dc.rle) {
         foreach (_j; 0 .. dc.h) {
@@ -965,8 +963,7 @@ void write_image_data(ref TGA_Encoder ec) {
         default: throw new ImageIOException("internal error");
     }
 
-    void function(in ubyte[] src_line, ubyte[] tgt_line) convert;
-    convert = get_converter(ec.src_chans, tgt_fmt);
+    const LineConv convert = get_converter(ec.src_chans, tgt_fmt);
 
     immutable long src_linesize = ec.w * ec.src_chans;
     immutable long tgt_linesize = ec.w * ec.tgt_chans;
@@ -1622,9 +1619,9 @@ void decode_scan(ref JPEG_Decoder dc) {
                         // decode entropy, dequantize & dezigzag
                         short[64] data = decode_block(dc, *comp, dc.qtables[comp.qtable]);
                         // idct & level-shift
-                        int outx = (mcu_i * comp.sfx + du_i) * 8;
-                        int outy = (mcu_j * comp.sfy + du_j) * 8;
-                        int dst_stride = dc.num_mcu_x * comp.sfx*8;
+                        long outx = (mcu_i * comp.sfx + du_i) * 8;
+                        long outy = (mcu_j * comp.sfy + du_j) * 8;
+                        long dst_stride = dc.num_mcu_x * comp.sfx*8;
                         ubyte* dst = comp.data.ptr + outy*dst_stride + outx;
                         stbi__idct_block(dst, dst_stride, data);
                     }
@@ -1636,7 +1633,7 @@ void decode_scan(ref JPEG_Decoder dc) {
             if (!mcus) {
                 --intervals;
                 if (!intervals)
-                    break;
+                    return;
 
                 read_restart(dc.stream);    // RSTx marker
 
@@ -1948,7 +1945,7 @@ pure void STBI__IDCT_1D(ref int t0, ref int t1, ref int t2, ref int t3,
 }
 
 // idct and level-shift
-pure void stbi__idct_block(ubyte* dst, int dst_stride, in ref short[64] data) {
+pure void stbi__idct_block(ubyte* dst, long dst_stride, in ref short[64] data) {
    int i;
    int[64] val;
    int* v = val.ptr;
@@ -2056,9 +2053,10 @@ enum _ColFmt : int {
     BGRA,
 }
 
-pure
-void function(in ubyte[] src, ubyte[] tgt) get_converter(int src_chans, int tgt_chans) {
-    int combo(int a, int b) pure nothrow { return a*16 + b; }
+alias LineConv = void function(in ubyte[] src, ubyte[] tgt);
+
+LineConv get_converter(long src_chans, long tgt_chans) pure {
+    long combo(long a, long b) pure nothrow { return a*16 + b; }
 
     if (src_chans == tgt_chans)
         return &copy_line;
