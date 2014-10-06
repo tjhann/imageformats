@@ -237,12 +237,12 @@ ubyte[] decode_png(ref PNG_Decoder dc) {
             throw new ImageIOException("chunk too long");
 
         // standard allows PLTE chunk for non-indexed images too but we don't
+        dc.crc.put(dc.chunkmeta[8..12]);  // type
         switch (cast(char[]) dc.chunkmeta[8..12]) {    // chunk type
             case "IDAT":
                 if (! (stage == Stage.IHDR_parsed ||
                       (stage == Stage.PLTE_parsed && dc.src_indexed)) )
                     throw new ImageIOException("corrupt chunk stream");
-                dc.crc.put(dc.chunkmeta[8..12]);  // type
                 result = read_IDAT_stream(dc, len);
                 stage = Stage.IDAT_parsed;
                 break;
@@ -254,7 +254,6 @@ ubyte[] decode_png(ref PNG_Decoder dc) {
                     throw new ImageIOException("corrupt chunk");
                 dc.palette = new ubyte[len];
                 dc.stream.readExact(dc.palette, dc.palette.length);
-                dc.crc.put(dc.chunkmeta[8..12]);  // type
                 dc.crc.put(dc.palette);
                 dc.stream.readExact(dc.chunkmeta, 12); // crc | len, type
                 if (dc.crc.finish.reverse != dc.chunkmeta[0..4])
@@ -273,7 +272,6 @@ ubyte[] decode_png(ref PNG_Decoder dc) {
                 throw new ImageIOException("corrupt chunk stream");
             default:
                 // unknown chunk, ignore but check crc
-                dc.crc.put(dc.chunkmeta[8..12]);  // type
                 while (0 < len) {
                     size_t bytes = min(len, dc.read_buf.length);
                     dc.stream.readExact(dc.read_buf, bytes);
