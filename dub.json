@@ -4,5 +4,6 @@
 	"authors": ["Tero Hänninen"],
 	"license": "BSL-1.0",
 	"importPaths": ["."],
+	"sourceFiles": ["imageformats.d"],
 	"targetType": "sourceLibrary"
 }
