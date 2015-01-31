@@ -1,6 +1,5 @@
 **Image loading and saving**
 - returned image data is always 8-bit (Y/YA/RGB/RGBA)
-- not optimal for 32-bit systems
 
 | Format | Decoder            | Encoder                           |
 | ---    | ---                | ---                               |
