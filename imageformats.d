@@ -205,7 +205,7 @@ struct PNG_Decoder {
     bool src_indexed;
     int src_chans;
     int tgt_chans;
-    long w, h;
+    size_t w, h;
     ubyte ilace;
 
     UnCompress uc;
@@ -310,17 +310,17 @@ enum InterlaceMethod {
 ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
     bool metaready = false;     // chunk len, type, crc
 
-    immutable int filter_step = dc.src_indexed ? 1 : dc.src_chans;
-    immutable long tgt_linesize = dc.w * dc.tgt_chans;
+    immutable uint filter_step = dc.src_indexed ? 1 : dc.src_chans;
+    immutable size_t tgt_linesize = cast(size_t) (dc.w * dc.tgt_chans);
 
-    ubyte[] depaletted_line = dc.src_indexed ? new ubyte[dc.w * 3] : null;
-    ubyte[] result = new ubyte[dc.w * dc.h * dc.tgt_chans];
+    ubyte[] depaletted_line = dc.src_indexed ? new ubyte[cast(size_t)dc.w * 3] : null;
+    ubyte[] result = new ubyte[cast(size_t)(dc.w * dc.h * dc.tgt_chans)];
 
     const LineConv chan_convert = get_converter(dc.src_chans, dc.tgt_chans);
 
     void depalette_convert(in ubyte[] src_line, ubyte[] tgt_line) {
-        for (long s, d;  s < src_line.length;  s+=1, d+=3) {
-            long pidx = src_line[s] * 3;
+        for (size_t s, d;  s < src_line.length;  s+=1, d+=3) {
+            size_t pidx = src_line[s] * 3;
             if (dc.palette.length < pidx + 3)
                 throw new ImageIOException("palette idx wrong");
             depaletted_line[d .. d+3] = dc.palette[pidx .. pidx+3];
@@ -335,12 +335,12 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
     const convert = dc.src_indexed ? &depalette_convert : &simple_convert;
 
     if (dc.ilace == InterlaceMethod.None) {
-        immutable long src_sl_size = dc.w * filter_step;
+        immutable size_t src_sl_size = cast(size_t) dc.w * filter_step;
         auto cline = new ubyte[src_sl_size+1];   // current line + filter byte
         auto pline = new ubyte[src_sl_size+1];   // previous line, inited to 0
         debug(DebugPNG) assert(pline[0] == 0);
 
-        long tgt_si = 0;    // scanline index in target buffer
+        size_t tgt_si = 0;    // scanline index in target buffer
         foreach (j; 0 .. dc.h) {
             uncompress_line(dc, len, metaready, cline);
             ubyte filter_type = cline[0];
@@ -356,7 +356,7 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
     } else {
         // Adam7 interlacing
 
-        immutable long[7] redw = [
+        immutable size_t[7] redw = [
             (dc.w + 7) / 8,
             (dc.w + 3) / 8,
             (dc.w + 3) / 4,
@@ -365,7 +365,7 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
             (dc.w + 0) / 2,
             (dc.w + 0) / 1,
         ];
-        immutable long[7] redh = [
+        immutable size_t[7] redh = [
             (dc.h + 7) / 8,
             (dc.h + 7) / 8,
             (dc.h + 3) / 8,
@@ -375,14 +375,14 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
             (dc.h + 0) / 2,
         ];
 
-        const long max_scanline_size = dc.w * filter_step;
+        const size_t max_scanline_size = cast(size_t) (dc.w * filter_step);
         const linebuf0 = new ubyte[max_scanline_size+1]; // +1 for filter type byte
         const linebuf1 = new ubyte[max_scanline_size+1]; // +1 for filter type byte
-        auto redlinebuf = new ubyte[dc.w * dc.tgt_chans];
+        auto redlinebuf = new ubyte[cast(size_t) dc.w * dc.tgt_chans];
 
         foreach (pass; 0 .. 7) {
             const A7_Catapult tgt_px = a7_catapults[pass];   // target pixel
-            const long src_linesize = redw[pass] * filter_step;
+            const size_t src_linesize = redw[pass] * filter_step;
             auto cline = cast(ubyte[]) linebuf0[0 .. src_linesize+1];
             auto pline = cast(ubyte[]) linebuf1[0 .. src_linesize+1];
 
@@ -393,8 +393,8 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
                 recon(cline[1..$], pline[1..$], filter_type, filter_step);
                 convert(cline[1 .. $], redlinebuf[0 .. redw[pass]*dc.tgt_chans]);
 
-                for (long i, redi; i < redw[pass]; ++i, redi += dc.tgt_chans) {
-                    long tgt = tgt_px(i, j, dc.w) * dc.tgt_chans;
+                for (size_t i, redi; i < redw[pass]; ++i, redi += dc.tgt_chans) {
+                    size_t tgt = tgt_px(i, j, dc.w) * dc.tgt_chans;
                     result[tgt .. tgt + dc.tgt_chans] =
                         redlinebuf[redi .. redi + dc.tgt_chans];
                 }
@@ -414,7 +414,7 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
     return result;
 }
 
-alias A7_Catapult = long function(long redx, long redy, long dstw);
+alias A7_Catapult = size_t function(size_t redx, size_t redy, size_t dstw);
 immutable A7_Catapult[7] a7_catapults = [
     &a7_red1_to_dst,
     &a7_red2_to_dst,
@@ -426,13 +426,13 @@ immutable A7_Catapult[7] a7_catapults = [
 ];
 
 pure nothrow {
-  long a7_red1_to_dst(long redx, long redy, long dstw) { return redy*8*dstw + redx*8;     }
-  long a7_red2_to_dst(long redx, long redy, long dstw) { return redy*8*dstw + redx*8+4;   }
-  long a7_red3_to_dst(long redx, long redy, long dstw) { return (redy*8+4)*dstw + redx*4; }
-  long a7_red4_to_dst(long redx, long redy, long dstw) { return redy*4*dstw + redx*4+2;   }
-  long a7_red5_to_dst(long redx, long redy, long dstw) { return (redy*4+2)*dstw + redx*2; }
-  long a7_red6_to_dst(long redx, long redy, long dstw) { return redy*2*dstw + redx*2+1;   }
-  long a7_red7_to_dst(long redx, long redy, long dstw) { return (redy*2+1)*dstw + redx;   }
+  size_t a7_red1_to_dst(size_t redx, size_t redy, size_t dstw) { return redy*8*dstw + redx*8;     }
+  size_t a7_red2_to_dst(size_t redx, size_t redy, size_t dstw) { return redy*8*dstw + redx*8+4;   }
+  size_t a7_red3_to_dst(size_t redx, size_t redy, size_t dstw) { return (redy*8+4)*dstw + redx*4; }
+  size_t a7_red4_to_dst(size_t redx, size_t redy, size_t dstw) { return redy*4*dstw + redx*4+2;   }
+  size_t a7_red5_to_dst(size_t redx, size_t redy, size_t dstw) { return (redy*4+2)*dstw + redx*2; }
+  size_t a7_red6_to_dst(size_t redx, size_t redy, size_t dstw) { return redy*2*dstw + redx*2+1;   }
+  size_t a7_red7_to_dst(size_t redx, size_t redy, size_t dstw) { return (redy*2+1)*dstw + redx;   }
 }
 
 void uncompress_line(ref PNG_Decoder dc, ref int length, ref bool metaready, ubyte[] dst) {
@@ -537,7 +537,7 @@ ubyte paeth(ubyte a, ubyte b, ubyte c) pure nothrow {
 void write_png(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 0) {
     if (w < 1 || h < 1 || int.max < w || int.max < h)
         throw new ImageIOException("invalid dimensions");
-    long src_chans = data.length / w / h;
+    uint src_chans = cast(uint) (data.length / w / h);
     if (src_chans < 1 || 4 < src_chans || tgt_chans < 0 || 4 < tgt_chans)
         throw new ImageIOException("invalid channel count");
     if (src_chans * w * h != data.length)
@@ -545,10 +545,10 @@ void write_png(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 
 
     PNG_Encoder ec = {
         stream    : stream,
-        w         : w,
-        h         : h,
+        w         : cast(size_t) w,
+        h         : cast(size_t) h,
         src_chans : src_chans,
-        tgt_chans : tgt_chans ? tgt_chans : src_chans,
+        tgt_chans : tgt_chans ? cast(uint) tgt_chans : src_chans,
         data      : data,
     };
 
@@ -558,9 +558,9 @@ void write_png(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 
 
 struct PNG_Encoder {
     Writer stream;
-    long w, h;
-    long src_chans;
-    long tgt_chans;
+    size_t w, h;
+    uint src_chans;
+    uint tgt_chans;
     const(ubyte)[] data;
 
     CRC32 crc;
@@ -599,7 +599,7 @@ void write_IDATs(ref PNG_Encoder ec) {
     ec.data_buf = ec.chunk_buf[8 .. 8 + max_idatlen];
     ec.chunk_buf[4 .. 8] = IDAT_type;
 
-    immutable long linesize = ec.w * ec.tgt_chans + 1; // +1 for filter type
+    immutable size_t linesize = ec.w * ec.tgt_chans + 1; // +1 for filter type
     ubyte[] cline = new ubyte[linesize];
     ubyte[] pline = new ubyte[linesize];
     debug(DebugPNG) assert(pline[0] == 0);
@@ -609,10 +609,10 @@ void write_IDATs(ref PNG_Encoder ec) {
 
     const LineConv convert = get_converter(ec.src_chans, ec.tgt_chans);
 
-    immutable long filter_step = ec.tgt_chans;   // step between pixels, in bytes
-    immutable long src_linesize = ec.w * ec.src_chans;
+    immutable size_t filter_step = ec.tgt_chans;   // step between pixels, in bytes
+    immutable size_t src_linesize = ec.w * ec.src_chans;
 
-    long si = 0;
+    size_t si = 0;
     foreach (j; 0 .. ec.h) {
         convert(ec.data[si .. si+src_linesize], cline[1..$]);
         si += src_linesize;
@@ -642,8 +642,8 @@ void write_IDATs(ref PNG_Encoder ec) {
 void write_to_IDAT_stream(ref PNG_Encoder ec, in void[] _compressed) {
     ubyte[] compressed = cast(ubyte[]) _compressed;
     while (compressed.length) {
-        long space_left = ec.data_buf.length - ec.writelen;
-        long writenow_len = min(space_left, compressed.length);
+        size_t space_left = ec.data_buf.length - ec.writelen;
+        size_t writenow_len = min(space_left, compressed.length);
         ec.data_buf[ec.writelen .. ec.writelen + writenow_len] =
             compressed[0 .. writenow_len];
         ec.writelen += writenow_len;
@@ -839,23 +839,23 @@ void write_tga(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 
 
 struct TGA_Decoder {
     Reader stream;
-    long w, h;
+    size_t w, h;
     bool origin_at_top;    // src
-    int bytes_pp;
+    uint bytes_pp;
     bool rle;   // run length compressed
     _ColFmt src_fmt;
-    int tgt_chans;
+    uint tgt_chans;
 }
 
 ubyte[] decode_tga(ref TGA_Decoder dc) {
     auto result = new ubyte[dc.w * dc.h * dc.tgt_chans];
 
-    immutable long tgt_linesize = dc.w * dc.tgt_chans;
-    immutable long src_linesize = dc.w * dc.bytes_pp;
+    immutable size_t tgt_linesize = dc.w * dc.tgt_chans;
+    immutable size_t src_linesize = dc.w * dc.bytes_pp;
     auto src_line = new ubyte[src_linesize];
 
-    immutable long tgt_stride = (dc.origin_at_top) ? tgt_linesize : -tgt_linesize;
-    long ti                   = (dc.origin_at_top) ? 0 : (dc.h-1) * tgt_linesize;
+    immutable ptrdiff_t tgt_stride = (dc.origin_at_top) ? tgt_linesize : -tgt_linesize;
+    ptrdiff_t ti                   = (dc.origin_at_top) ? 0 : (dc.h-1) * tgt_linesize;
 
     const LineConv convert = get_converter(dc.src_fmt, dc.tgt_chans);
 
@@ -871,23 +871,23 @@ ubyte[] decode_tga(ref TGA_Decoder dc) {
     // ----- RLE  -----
 
     auto rbuf = new ubyte[src_linesize];
-    long plen = 0;      // packet length
+    size_t plen = 0;      // packet length
     bool its_rle = false;
 
     foreach (_j; 0 .. dc.h) {
         // fill src_line with uncompressed data (this works like a stream)
-        long wanted = src_linesize;
+        size_t wanted = src_linesize;
         while (wanted) {
             if (plen == 0) {
                 dc.stream.readExact(rbuf, 1);
                 its_rle = cast(bool) (rbuf[0] & 0x80);
                 plen = ((rbuf[0] & 0x7f) + 1) * dc.bytes_pp; // length in bytes
             }
-            const long gotten = src_linesize - wanted;
-            const long copysize = min(plen, wanted);
+            const size_t gotten = src_linesize - wanted;
+            const size_t copysize = min(plen, wanted);
             if (its_rle) {
                 dc.stream.readExact(rbuf, dc.bytes_pp);
-                for (long p = gotten; p < gotten+copysize; p += dc.bytes_pp)
+                for (size_t p = gotten; p < gotten+copysize; p += dc.bytes_pp)
                     src_line[p .. p+dc.bytes_pp] = rbuf[0 .. dc.bytes_pp];
             } else {    // it's raw
                 auto slice = src_line[gotten .. gotten+copysize];
@@ -963,11 +963,11 @@ void write_image_data(ref TGA_Encoder ec) {
 
     const LineConv convert = get_converter(ec.src_chans, tgt_fmt);
 
-    immutable long src_linesize = ec.w * ec.src_chans;
-    immutable long tgt_linesize = ec.w * ec.tgt_chans;
+    immutable size_t src_linesize = ec.w * ec.src_chans;
+    immutable size_t tgt_linesize = ec.w * ec.tgt_chans;
     auto tgt_line = new ubyte[tgt_linesize];
 
-    long si = (ec.h-1) * src_linesize;     // origin at bottom
+    ptrdiff_t si = (ec.h-1) * src_linesize;     // origin at bottom
 
     if (!ec.rle) {
         foreach (_; 0 .. ec.h) {
@@ -981,7 +981,7 @@ void write_image_data(ref TGA_Encoder ec) {
     // ----- RLE  -----
 
     immutable bytes_pp = ec.tgt_chans;
-    immutable long max_packets_per_line = (tgt_linesize+127) / 128;
+    immutable size_t max_packets_per_line = (tgt_linesize+127) / 128;
     auto tgt_cmp = new ubyte[tgt_linesize + max_packets_per_line];  // compressed line
     foreach (_; 0 .. ec.h) {
         convert(ec.data[si .. si + src_linesize], tgt_line);
@@ -991,15 +991,15 @@ void write_image_data(ref TGA_Encoder ec) {
     }
 }
 
-ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bytes_pp) pure {
+ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in size_t w, in int bytes_pp) pure {
     immutable int rle_limit = (1 < bytes_pp) ? 2 : 3;  // run len worth an RLE packet
-    long runlen = 0;
-    long rawlen = 0;
-    long raw_i = 0; // start of raw packet data in line
-    long cmp_i = 0;
-    long pixels_left = w;
+    size_t runlen = 0;
+    size_t rawlen = 0;
+    size_t raw_i = 0; // start of raw packet data in line
+    size_t cmp_i = 0;
+    size_t pixels_left = w;
     const (ubyte)[] px;
-    for (long i = bytes_pp; pixels_left; i += bytes_pp) {
+    for (size_t i = bytes_pp; pixels_left; i += bytes_pp) {
         runlen = 1;
         px = line[i-bytes_pp .. i];
         while (i < line.length && line[i .. i+bytes_pp] == px[0..$] && runlen < 128) {
@@ -1012,7 +1012,7 @@ ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bytes_p
             // data goes to raw packet
             rawlen += runlen;
             if (128 <= rawlen) {     // full packet, need to store it
-                long copysize = 128 * bytes_pp;
+                size_t copysize = 128 * bytes_pp;
                 tgt_cmp[cmp_i++] = 0x7f; // raw packet header
                 tgt_cmp[cmp_i .. cmp_i+copysize] = line[raw_i .. raw_i+copysize];
                 cmp_i += copysize;
@@ -1025,7 +1025,7 @@ ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bytes_p
             // store raw packet first, if any
             if (rawlen) {
                 assert(rawlen < 128);
-                long copysize = rawlen * bytes_pp;
+                size_t copysize = rawlen * bytes_pp;
                 tgt_cmp[cmp_i++] = cast(ubyte) (rawlen-1); // raw packet header
                 tgt_cmp[cmp_i .. cmp_i+copysize] = line[raw_i .. raw_i+copysize];
                 cmp_i += copysize;
@@ -1041,7 +1041,7 @@ ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in long w, in int bytes_p
     }   // for
 
     if (rawlen) {   // last packet of the line
-        long copysize = rawlen * bytes_pp;
+        size_t copysize = rawlen * bytes_pp;
         tgt_cmp[cmp_i++] = cast(ubyte) (rawlen-1); // raw packet header
         tgt_cmp[cmp_i .. cmp_i+copysize] = line[raw_i .. raw_i+copysize];
         cmp_i += copysize;
@@ -1252,7 +1252,7 @@ struct JPEG_Decoder {
     int[3] index_for;   // index_for[0] is index of comp that comes first in stream
     int tgt_chans;
 
-    long width, height;
+    size_t width, height;
 
     int hmax, vmax;
 
@@ -1770,7 +1770,7 @@ ubyte[] reconstruct(in ref JPEG_Decoder dc) {
                     return dc.upsample_rgb(result);
             }
 
-            long si, di;
+            size_t si, di;
             foreach (j; 0 .. dc.height) {
                 foreach (i; 0 .. dc.width) {
                     result[di .. di+3] = ycbcr_to_rgb(
@@ -1788,7 +1788,7 @@ ubyte[] reconstruct(in ref JPEG_Decoder dc) {
         case 32, 12, 31, 11:
             const comp = &dc.comps[0];
             if (comp.sfx == dc.hmax && comp.sfy == dc.vmax) {
-                long si, di;
+                size_t si, di;
                 if (dc.tgt_chans == 2) {
                     foreach (j; 0 .. dc.height) {
                         foreach (i; 0 .. dc.width) {
@@ -1811,7 +1811,7 @@ ubyte[] reconstruct(in ref JPEG_Decoder dc) {
             }
         case 14, 13:
             const comp = &dc.comps[0];
-            long si, di;
+            size_t si, di;
             foreach (j; 0 .. dc.height) {
                 foreach (i; 0 .. dc.width) {
                     result[di .. di+3] = comp.data[si+i];
@@ -1827,15 +1827,15 @@ ubyte[] reconstruct(in ref JPEG_Decoder dc) {
 }
 
 ubyte[] upsample_gray(in ref JPEG_Decoder dc, ubyte[] result) {
-    const long stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
+    const size_t stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
     const double si0yratio = cast(double) dc.comps[0].y / dc.height;
     const double si0xratio = cast(double) dc.comps[0].x / dc.width;
-    long si0, di;
+    size_t si0, di;
 
     foreach (j; 0 .. dc.height) {
-        si0 = cast(long) floor(j * si0yratio) * stride0;
+        si0 = cast(size_t) floor(j * si0yratio) * stride0;
         foreach (i; 0 .. dc.width) {
-            result[di] = dc.comps[0].data[si0 + cast(long) floor(i * si0xratio)];
+            result[di] = dc.comps[0].data[si0 + cast(size_t) floor(i * si0xratio)];
             if (dc.tgt_chans == 2)
                 result[di+1] = 255;
             di += dc.tgt_chans;
@@ -1845,9 +1845,9 @@ ubyte[] upsample_gray(in ref JPEG_Decoder dc, ubyte[] result) {
 }
 
 ubyte[] upsample_rgb(in ref JPEG_Decoder dc, ubyte[] result) {
-    const long stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
-    const long stride1 = dc.num_mcu_x * dc.comps[1].sfx * 8;
-    const long stride2 = dc.num_mcu_x * dc.comps[2].sfx * 8;
+    const size_t stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
+    const size_t stride1 = dc.num_mcu_x * dc.comps[1].sfx * 8;
+    const size_t stride2 = dc.num_mcu_x * dc.comps[2].sfx * 8;
 
     const double si0yratio = cast(double) dc.comps[0].y / dc.height;
     const double si1yratio = cast(double) dc.comps[1].y / dc.height;
@@ -1855,18 +1855,18 @@ ubyte[] upsample_rgb(in ref JPEG_Decoder dc, ubyte[] result) {
     const double si0xratio = cast(double) dc.comps[0].x / dc.width;
     const double si1xratio = cast(double) dc.comps[1].x / dc.width;
     const double si2xratio = cast(double) dc.comps[2].x / dc.width;
-    long si0, si1, si2, di;
+    size_t si0, si1, si2, di;
 
     foreach (j; 0 .. dc.height) {
-        si0 = cast(long) floor(j * si0yratio) * stride0;
-        si1 = cast(long) floor(j * si1yratio) * stride1;
-        si2 = cast(long) floor(j * si2yratio) * stride2;
+        si0 = cast(size_t) floor(j * si0yratio) * stride0;
+        si1 = cast(size_t) floor(j * si1yratio) * stride1;
+        si2 = cast(size_t) floor(j * si2yratio) * stride2;
 
         foreach (i; 0 .. dc.width) {
             result[di .. di+3] = ycbcr_to_rgb(
-                dc.comps[0].data[si0 + cast(long) floor(i * si0xratio)],
-                dc.comps[1].data[si1 + cast(long) floor(i * si1xratio)],
-                dc.comps[2].data[si2 + cast(long) floor(i * si2xratio)],
+                dc.comps[0].data[si0 + cast(size_t) floor(i * si0xratio)],
+                dc.comps[1].data[si1 + cast(size_t) floor(i * si1xratio)],
+                dc.comps[2].data[si2 + cast(size_t) floor(i * si2xratio)],
             );
             if (dc.tgt_chans == 4)
                 result[di+3] = 255;
@@ -2101,7 +2101,7 @@ ubyte luminance(ubyte r, ubyte g, ubyte b) pure nothrow {
 }
 
 void Y_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=1, t+=2) {
+    for (size_t k, t;   k < src.length;   k+=1, t+=2) {
         tgt[t] = src[k];
         tgt[t+1] = 255;
     }
@@ -2109,80 +2109,80 @@ void Y_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
 
 alias Y_to_BGR = Y_to_RGB;
 void Y_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=1, t+=3)
+    for (size_t k, t;   k < src.length;   k+=1, t+=3)
         tgt[t .. t+3] = src[k];
 }
 
 alias Y_to_BGRA = Y_to_RGBA;
 void Y_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=1, t+=4) {
+    for (size_t k, t;   k < src.length;   k+=1, t+=4) {
         tgt[t .. t+3] = src[k];
         tgt[t+3] = 255;
     }
 }
 
 void YA_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=2, t+=1)
+    for (size_t k, t;   k < src.length;   k+=2, t+=1)
         tgt[t] = src[k];
 }
 
 alias YA_to_BGR = YA_to_RGB;
 void YA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=2, t+=3)
+    for (size_t k, t;   k < src.length;   k+=2, t+=3)
         tgt[t .. t+3] = src[k];
 }
 
 alias YA_to_BGRA = YA_to_RGBA;
 void YA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=2, t+=4) {
+    for (size_t k, t;   k < src.length;   k+=2, t+=4) {
         tgt[t .. t+3] = src[k];
         tgt[t+3] = src[k+1];
     }
 }
 
 void RGB_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=3, t+=1)
+    for (size_t k, t;   k < src.length;   k+=3, t+=1)
         tgt[t] = luminance(src[k], src[k+1], src[k+2]);
 }
 
 void RGB_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=3, t+=2) {
+    for (size_t k, t;   k < src.length;   k+=3, t+=2) {
         tgt[t] = luminance(src[k], src[k+1], src[k+2]);
         tgt[t+1] = 255;
     }
 }
 
 void RGB_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=3, t+=4) {
+    for (size_t k, t;   k < src.length;   k+=3, t+=4) {
         tgt[t .. t+3] = src[k .. k+3];
         tgt[t+3] = 255;
     }
 }
 
 void RGBA_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=4, t+=1)
+    for (size_t k, t;   k < src.length;   k+=4, t+=1)
         tgt[t] = luminance(src[k], src[k+1], src[k+2]);
 }
 
 void RGBA_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=4, t+=2) {
+    for (size_t k, t;   k < src.length;   k+=4, t+=2) {
         tgt[t] = luminance(src[k], src[k+1], src[k+2]);
         tgt[t+1] = src[k+3];
     }
 }
 
 void RGBA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=4, t+=3)
+    for (size_t k, t;   k < src.length;   k+=4, t+=3)
         tgt[t .. t+3] = src[k .. k+3];
 }
 
 void BGR_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=3, t+=1)
+    for (size_t k, t;   k < src.length;   k+=3, t+=1)
         tgt[t] = luminance(src[k+2], src[k+1], src[k+1]);
 }
 
 void BGR_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=3, t+=2) {
+    for (size_t k, t;   k < src.length;   k+=3, t+=2) {
         tgt[t] = luminance(src[k+2], src[k+1], src[k+1]);
         tgt[t+1] = 255;
     }
@@ -2190,7 +2190,7 @@ void BGR_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
 
 alias RGB_to_BGR = BGR_to_RGB;
 void BGR_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k;   k < src.length;   k+=3) {
+    for (size_t k;   k < src.length;   k+=3) {
         tgt[k  ] = src[k+2];
         tgt[k+1] = src[k+1];
         tgt[k+2] = src[k  ];
@@ -2199,7 +2199,7 @@ void BGR_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
 
 alias RGB_to_BGRA = BGR_to_RGBA;
 void BGR_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=3, t+=4) {
+    for (size_t k, t;   k < src.length;   k+=3, t+=4) {
         tgt[t  ] = src[k+2];
         tgt[t+1] = src[k+1];
         tgt[t+2] = src[k  ];
@@ -2208,12 +2208,12 @@ void BGR_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
 }
 
 void BGRA_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=4, t+=1)
+    for (size_t k, t;   k < src.length;   k+=4, t+=1)
         tgt[t] = luminance(src[k+2], src[k+1], src[k]);
 }
 
 void BGRA_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=4, t+=2) {
+    for (size_t k, t;   k < src.length;   k+=4, t+=2) {
         tgt[t] = luminance(src[k+2], src[k+1], src[k]);
         tgt[t+1] = 255;
     }
@@ -2221,7 +2221,7 @@ void BGRA_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
 
 alias RGBA_to_BGR = BGRA_to_RGB;
 void BGRA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=4, t+=3) {
+    for (size_t k, t;   k < src.length;   k+=4, t+=3) {
         tgt[t  ] = src[k+2];
         tgt[t+1] = src[k+1];
         tgt[t+2] = src[k  ];
@@ -2230,7 +2230,7 @@ void BGRA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
 
 alias RGBA_to_BGRA = BGRA_to_RGBA;
 void BGRA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (long k, t;   k < src.length;   k+=4, t+=4) {
+    for (size_t k, t;   k < src.length;   k+=4, t+=4) {
         tgt[t  ] = src[k+2];
         tgt[t+1] = src[k+1];
         tgt[t+2] = src[k  ];
@@ -2242,7 +2242,7 @@ void BGRA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
 
 class Reader {
     const void delegate(ubyte[], size_t) readExact;
-    const void delegate(long, int) seek;
+    const void delegate(ptrdiff_t, int) seek;
 
     this(in char[] filename) {
         this(File(filename.idup, "rb"));
@@ -2270,17 +2270,17 @@ class Reader {
         if (slice.length != bytes)
             throw new Exception("not enough data");
     }
-    void file_seek(long offset, int origin) { this.f.seek(offset, origin); }
+    void file_seek(ptrdiff_t offset, int origin) { this.f.seek(offset, origin); }
 
     const ubyte[] source;
-    long cursor;
+    ptrdiff_t cursor;
     void mem_readExact(ubyte[] buffer, size_t bytes) {
         if (source.length - cursor < bytes)
             throw new Exception("not enough data");
         buffer[0..bytes] = source[cursor .. cursor+bytes];
         cursor += bytes;
     }
-    void mem_seek(long offset, int origin) {
+    void mem_seek(ptrdiff_t offset, int origin) {
         switch (origin) {
             case SEEK_SET:
                 if (offset < 0 || source.length <= offset)
@@ -2288,7 +2288,7 @@ class Reader {
                 cursor = offset;
                 break;
             case SEEK_CUR:
-                long dst = cursor + offset;
+                ptrdiff_t dst = cursor + offset;
                 if (dst < 0 || source.length <= dst)
                     throw new Exception("seek error");
                 cursor = dst;
@@ -2296,7 +2296,7 @@ class Reader {
             case SEEK_END:
                 if (0 <= offset || source.length < -offset)
                     throw new Exception("seek error");
-                cursor = cast(long) source.length + offset;
+                cursor = cast(ptrdiff_t) source.length + offset;
                 break;
             default: assert(0);
         }
