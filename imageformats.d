@@ -23,46 +23,45 @@ enum ColFmt {
 IFImage read_image(in char[] file, long req_chans = 0) {
     const(char)[] ext = extract_extension_lowercase(file);
 
-    if (ext in register) {
-        ImageIOFuncs funcs = register[ext];
-        if (funcs.read_image is null)
-            throw new ImageIOException("null function pointer");
-        scope reader = new Reader(file);
-        return funcs.read_image(reader, req_chans);
+    IFImage function(Reader, long) read_image;
+    switch (ext) {
+        case "png": read_image = &read_png; break;
+        case "tga": read_image = &read_tga; break;
+        case "jpg": read_image = &read_jpeg; break;
+        case "jpeg": read_image = &read_jpeg; break;
+        default: throw new ImageIOException("unknown image extension/type");
     }
-
-    throw new ImageIOException("unknown image extension/type");
+    scope reader = new Reader(file);
+    return read_image(reader, req_chans);
 }
 
-void write_image(in char[] filename, long w, long h, in ubyte[] data, long req_chans = 0) {
-    const(char)[] ext = extract_extension_lowercase(filename);
+void write_image(in char[] file, long w, long h, in ubyte[] data, long req_chans = 0) {
+    const(char)[] ext = extract_extension_lowercase(file);
 
-    if (ext in register) {
-        ImageIOFuncs funcs = register[ext];
-        if (funcs.write_image is null)
-            throw new ImageIOException("null function pointer");
-        scope writer = new Writer(filename);
-        funcs.write_image(writer, w, h, data, req_chans);
-        return;
+    void function(Writer, long, long, in ubyte[], long) write_image;
+    switch (ext) {
+        case "png": write_image = &write_png; break;
+        case "tga": write_image = &write_tga; break;
+        default: throw new ImageIOException("unknown image extension/type");
     }
-
-    throw new ImageIOException("unknown image extension/type");
+    scope writer = new Writer(file);
+    write_image(writer, w, h, data, req_chans);
 }
 
 // chans is set to zero if num of channels is unknown
-void read_image_info(in char[] filename, out long w, out long h, out long chans) {
-    const(char)[] ext = extract_extension_lowercase(filename);
+void read_image_info(in char[] file, out long w, out long h, out long chans) {
+    const(char)[] ext = extract_extension_lowercase(file);
 
-    if (ext in register) {
-        ImageIOFuncs funcs = register[ext];
-        if (funcs.read_info is null)
-            throw new ImageIOException("null function pointer");
-        scope reader = new Reader(filename);
-        funcs.read_info(reader, w, h, chans);
-        return;
+    void function(Reader, out long, out long, out long) read_image_info;
+    switch (ext) {
+        case "png": read_image_info = &read_png_info; break;
+        case "tga": read_image_info = &read_tga_info; break;
+        case "jpg": read_image_info = &read_jpeg_info; break;
+        case "jpeg": read_image_info = &read_jpeg_info; break;
+        default: throw new ImageIOException("unknown image extension/type");
     }
-
-    throw new ImageIOException("unknown image extension/type");
+    scope reader = new Reader(file);
+    return read_image_info(reader, w, h, chans);
 }
 
 class ImageIOException : Exception {
@@ -669,10 +668,6 @@ void read_png_info(Reader stream, out long w, out long h, out long chans) {
     chans = channels(cast(PNG_ColorType) hdr.color_type);
 }
 
-static this() {
-    register["png"] = ImageIOFuncs(&read_png, &write_png, &read_png_info);
-}
-
 // --------------------------------------------------------------------------------
 // TGA
 
@@ -1081,10 +1076,6 @@ void read_tga_info(Reader stream, out long w, out long h, out long chans) {
         }
     }
     chans = 0;  // unknown
-}
-
-static this() {
-    register["tga"] = ImageIOFuncs(&read_tga, &write_tga, &read_tga_info);
 }
 
 // --------------------------------------------------------------------------------
@@ -2033,11 +2024,6 @@ void read_jpeg_info(Reader stream, out long w, out long h, out long chans) {
     chans = hdr.num_comps;
 }
 
-static this() {
-    register["jpg"] = ImageIOFuncs(&read_jpeg, null, &read_jpeg_info);
-    register["jpeg"] = ImageIOFuncs(&read_jpeg, null, &read_jpeg_info);
-}
-
 // --------------------------------------------------------------------------------
 // Conversions
 
@@ -2339,12 +2325,4 @@ class Writer {
 const(char)[] extract_extension_lowercase(in char[] filename) {
     ptrdiff_t di = filename.lastIndexOf('.');
     return (0 < di && di+1 < filename.length) ? filename[di+1..$].toLower() : "";
-}
-
-immutable ImageIOFuncs[string] register;
-
-struct ImageIOFuncs {
-    IFImage function(Reader s, long req_chans) read_image;
-    void function(Writer s, long w, long h, in ubyte[] data, long req_chans) write_image;
-    void function(Reader s, out long w, out long h, out long c) read_info;
 }
