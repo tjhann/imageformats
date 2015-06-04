@@ -2,7 +2,7 @@
 // Boost Software License - Version 1.0 - August 17th, 2003
 module imageformats;
 
-import std.algorithm;   // min
+import std.algorithm;   // min, reverse
 import std.bitmanip;   // endianness stuff
 import std.stdio;    // File
 import std.string;  // toLower, lastIndexOf
@@ -99,9 +99,11 @@ PNG_Header read_png_header(Reader stream) {
     ubyte[33] tmp = void;  // file header, IHDR len+type+data+crc
     stream.readExact(tmp, tmp.length);
 
+    ubyte[] rev = crc32Of(tmp[12..29]);
+    reverse(rev);
     if ( tmp[0..8] != png_file_header[0..$]              ||
          tmp[8..16] != [0x0,0x0,0x0,0xd,'I','H','D','R'] ||
-         crc32Of(tmp[12..29]).reverse != tmp[29..33] )
+         rev != tmp[29..33] )
         throw new ImageIOException("corrupt header");
 
     PNG_Header header = {
@@ -255,7 +257,9 @@ ubyte[] decode_png(ref PNG_Decoder dc) {
                 dc.stream.readExact(dc.palette, dc.palette.length);
                 dc.crc.put(dc.palette);
                 dc.stream.readExact(dc.chunkmeta, 12); // crc | len, type
-                if (dc.crc.finish.reverse != dc.chunkmeta[0..4])
+                ubyte[] rev = dc.crc.finish;
+                reverse(rev);
+                if (rev != dc.chunkmeta[0..4])
                     throw new ImageIOException("corrupt chunk");
                 stage = Stage.PLTE_parsed;
                 break;
@@ -278,7 +282,9 @@ ubyte[] decode_png(ref PNG_Decoder dc) {
                     dc.crc.put(dc.read_buf[0..bytes]);
                 }
                 dc.stream.readExact(dc.chunkmeta, 12); // crc | len, type
-                if (dc.crc.finish.reverse != dc.chunkmeta[0..4])
+                ubyte[] rev = dc.crc.finish;
+                reverse(rev);
+                if (rev != dc.chunkmeta[0..4])
                     throw new ImageIOException("corrupt chunk");
         }
     }
@@ -407,7 +413,9 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
 
     if (!metaready) {
         dc.stream.readExact(dc.chunkmeta, 12);   // crc | len & type
-        if (dc.crc.finish.reverse != dc.chunkmeta[0..4])
+        ubyte[] rev = dc.crc.finish;
+        reverse(rev);
+        if (rev != dc.chunkmeta[0..4])
             throw new ImageIOException("corrupt chunk");
     }
     return result;
@@ -446,7 +454,9 @@ void uncompress_line(ref PNG_Decoder dc, ref int length, ref bool metaready, uby
         // need new data for dc.uc_buf...
         if (length <= 0) {  // IDAT is read -> read next chunks meta
             dc.stream.readExact(dc.chunkmeta, 12);   // crc | len & type
-            if (dc.crc.finish.reverse != dc.chunkmeta[0..4])
+            ubyte[] rev = dc.crc.finish;
+            reverse(rev);
+            if (rev != dc.chunkmeta[0..4])
                 throw new ImageIOException("corrupt chunk");
 
             length = bigEndianToNative!int(dc.chunkmeta[4..8]);
@@ -580,7 +590,9 @@ void write_png(ref PNG_Encoder ec) {
     hdr[26 .. 29] = 0;  // compression, filter and interlace methods
     ec.crc.start();
     ec.crc.put(hdr[12 .. 29]);
-    hdr[29 .. 33] = ec.crc.finish().reverse;
+    ubyte[] rev = ec.crc.finish();
+    reverse(rev);
+    hdr[29 .. 33] = rev;
     ec.stream.rawWrite(hdr);
 
     write_IDATs(ec);
@@ -656,7 +668,9 @@ void write_to_IDAT_stream(ref PNG_Encoder ec, in void[] _compressed) {
 void write_IDAT_chunk(ref PNG_Encoder ec) {
     ec.chunk_buf[0 .. 4] = nativeToBigEndian!uint(ec.writelen);
     ec.crc.put(ec.chunk_buf[4 .. 8 + ec.writelen]);   // crc of type and data
-    ec.chunk_buf[8 + ec.writelen .. 8 + ec.writelen + 4] = ec.crc.finish().reverse;
+    ubyte[] rev = ec.crc.finish();
+    reverse(rev);
+    ec.chunk_buf[8 + ec.writelen .. 8 + ec.writelen + 4] = rev;
     ec.stream.rawWrite(ec.chunk_buf[0 .. 8 + ec.writelen + 4]);
     ec.writelen = 0;
 }
