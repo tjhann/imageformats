@@ -27,6 +27,7 @@ IFImage read_image(in char[] file, long req_chans = 0) {
     switch (ext) {
         case "png": read_image = &read_png; break;
         case "tga": read_image = &read_tga; break;
+        case "bmp": read_image = &read_bmp; break;
         case "jpg": read_image = &read_jpeg; break;
         case "jpeg": read_image = &read_jpeg; break;
         default: throw new ImageIOException("unknown image extension/type");
@@ -56,6 +57,7 @@ void read_image_info(in char[] file, out long w, out long h, out long chans) {
     switch (ext) {
         case "png": read_image_info = &read_png_info; break;
         case "tga": read_image_info = &read_tga_info; break;
+        case "bmp": read_image_info = &read_bmp_info; break;
         case "jpg": read_image_info = &read_jpeg_info; break;
         case "jpeg": read_image_info = &read_jpeg_info; break;
         default: throw new ImageIOException("unknown image extension/type");
@@ -1093,15 +1095,305 @@ void read_tga_info(Reader stream, out long w, out long h, out long chans) {
 }
 
 // --------------------------------------------------------------------------------
-/*
-    Baseline JPEG/JFIF decoder
-    - not quite optimized but should be well usable already. seems to be
-    something like 1.66 times slower with ldc and 1.78 times slower with gdc
-    than stb_image.
-    - memory use could be reduced by processing MCU-row at a time, and, if
-    only grayscale result is requested, the Cb and Cr components could be
-    discarded much earlier.
-*/
+// BMP
+
+public IFImage read_bmp(in char[] filename, long req_chans = 0) {
+    scope reader = new Reader(filename);
+    return read_bmp(reader, req_chans);
+}
+
+public IFImage read_bmp_from_mem(in ubyte[] source, long req_chans = 0) {
+    scope reader = new Reader(source);
+    return read_bmp(reader, req_chans);
+}
+
+public BMP_Header read_bmp_header(in char[] filename) {
+    scope reader = new Reader(filename);
+    return read_bmp_header(reader);
+}
+
+public struct BMP_Header {
+    size_t file_size;
+    size_t pixel_data_offset;
+
+    size_t dib_size;
+    ptrdiff_t width;
+    ptrdiff_t height;
+    ushort planes;
+    uint dib_version;
+    DibV1 dib_v1;
+    DibV2 dib_v2;
+    uint dib_v3_alpha_mask;
+    DibV4 dib_v4;
+    DibV5 dib_v5;
+}
+
+public struct DibV1 {
+    size_t bits_pp;
+    uint compression;
+    size_t idat_size;
+    size_t pixels_per_meter_x;
+    size_t pixels_per_meter_y;
+    size_t palette_length;
+    uint important_color_count;
+}
+
+public struct DibV2 {
+    uint red_mask;
+    uint green_mask;
+    uint blue_mask;
+}
+
+public struct DibV4 {
+    uint color_space_type;
+    ubyte[36] color_space_endpoints;
+    uint gamma_red;
+    uint gamma_green;
+    uint gamma_blue;
+    uint intent;
+}
+
+public struct DibV5 {
+    uint icc_profile_data;
+    uint icc_profile_size;
+}
+
+BMP_Header read_bmp_header(Reader stream) {
+    ubyte[18] tmp = void;  // bmp header + size of dib header
+    stream.readExact(tmp[], tmp.length);
+
+    if (tmp[0..2] != ['B', 'M'])
+        throw new ImageIOException("corrupt header");
+
+    size_t dib_size = littleEndianToNative!uint(tmp[14..18]);
+    uint dib_version;
+    switch (dib_size) {
+        case 12: dib_version = 0; break;
+        case 40: dib_version = 1; break;
+        case 52: dib_version = 2; break;
+        case 56: dib_version = 3; break;
+        case 108: dib_version = 4; break;
+        case 124: dib_version = 5; break;
+        default: throw new ImageIOException("unsupported dib version");
+    }
+    auto dib_header = new ubyte[dib_size-4];
+    stream.readExact(dib_header[], dib_header.length);
+
+    DibV1 dib_v1;
+    DibV2 dib_v2;
+    uint dib_v3_alpha_mask;
+    DibV4 dib_v4;
+    DibV5 dib_v5;
+
+    if (1 <= dib_version) {
+        DibV1 v1 = {
+            bits_pp               : cast(size_t) littleEndianToNative!ushort(dib_header[10..12]),
+            compression           : littleEndianToNative!uint(dib_header[12..16]),
+            idat_size             : cast(size_t) littleEndianToNative!uint(dib_header[16..20]),
+            pixels_per_meter_x    : cast(size_t) littleEndianToNative!uint(dib_header[20..24]),
+            pixels_per_meter_y    : cast(size_t) littleEndianToNative!uint(dib_header[24..28]),
+            palette_length        : cast(size_t) littleEndianToNative!uint(dib_header[28..32]),
+            important_color_count : littleEndianToNative!uint(dib_header[32..36]),
+        };
+        dib_v1 = v1;
+    }
+
+    if (2 <= dib_version) {
+        DibV2 v2 = {
+            red_mask              : littleEndianToNative!uint(dib_header[36..40]),
+            green_mask            : littleEndianToNative!uint(dib_header[40..44]),
+            blue_mask             : littleEndianToNative!uint(dib_header[44..48]),
+        };
+        dib_v2 = v2;
+    }
+
+    if (3 <= dib_version) {
+        dib_v3_alpha_mask = littleEndianToNative!uint(dib_header[48..52]);
+    }
+
+    if (4 <= dib_version) {
+        DibV4 v4 = {
+            color_space_type      : littleEndianToNative!uint(dib_header[52..56]),
+            color_space_endpoints : dib_header[56..92],
+            gamma_red             : littleEndianToNative!uint(dib_header[92..96]),
+            gamma_green           : littleEndianToNative!uint(dib_header[96..100]),
+            gamma_blue            : littleEndianToNative!uint(dib_header[100..104]),
+            intent                : littleEndianToNative!uint(dib_header[104..108]),
+        };
+        dib_v4 = v4;
+    }
+
+    if (5 <= dib_version) {
+        DibV5 v5 = {
+            icc_profile_data      : littleEndianToNative!uint(dib_header[108..112]),
+            icc_profile_size      : littleEndianToNative!uint(dib_header[112..116]),
+        };
+        dib_v5 = v5;
+    }
+
+    BMP_Header header = {
+        file_size             : cast(size_t) littleEndianToNative!uint(tmp[2..6]),
+        pixel_data_offset     : cast(size_t) littleEndianToNative!uint(tmp[10..14]),
+        width                 : littleEndianToNative!int(dib_header[0..4]),
+        height                : littleEndianToNative!int(dib_header[4..8]),
+        planes                : littleEndianToNative!ushort(dib_header[8..10]),
+        dib_version           : dib_version,
+        dib_v1                : dib_v1,
+        dib_v2                : dib_v2,
+        dib_v3_alpha_mask     : dib_v3_alpha_mask,
+        dib_v4                : dib_v4,
+        dib_v5                : dib_v5,
+    };
+    return header;
+}
+
+enum CMP_RGB  = 0;
+enum CMP_BITS = 3;
+
+IFImage read_bmp(Reader stream, long req_chans = 0) {
+    if (req_chans < 0 || 4 < req_chans)
+        throw new ImageIOException("unknown color format");
+
+    BMP_Header hdr = read_bmp_header(stream);
+
+    if (hdr.width < 1 || hdr.height == 0) { throw new ImageIOException("invalid dimensions"); }
+    if (hdr.pixel_data_offset < (14 + hdr.dib_size)
+    || hdr.pixel_data_offset > 0xffffff /* arbitrary */) {
+        throw new ImageIOException("invalid pixel data offset");
+    }
+    if (hdr.planes != 1) { throw new ImageIOException("not supported"); }
+
+    auto bytes_pp       = 1;
+    bool paletted       = true;
+    size_t palette_length = 256;
+    bool rgb_masked     = false;
+    auto pe_bytes_pp    = 3;
+
+    if (1 <= hdr.dib_version) {
+        if (256 < hdr.dib_v1.palette_length)
+            throw new ImageIOException("ivnalid palette length");
+        if (hdr.dib_v1.bits_pp <= 8 &&
+           (hdr.dib_v1.palette_length == 0 || hdr.dib_v1.compression != CMP_RGB))
+             throw new ImageIOException("invalid format");
+        if (hdr.dib_v1.compression != CMP_RGB && hdr.dib_v1.compression != CMP_BITS)
+             throw new ImageIOException("unsupported compression");
+
+        switch (hdr.dib_v1.bits_pp) {
+            case 8  : bytes_pp = 1; paletted = true; break;
+            case 24 : bytes_pp = 3; paletted = false; break;
+            case 32 : bytes_pp = 4; paletted = false; break;
+            default: throw new ImageIOException("not supported");
+        }
+
+        palette_length = hdr.dib_v1.palette_length;
+        rgb_masked = hdr.dib_v1.compression == CMP_BITS;
+        pe_bytes_pp = 4;
+    }
+
+    size_t mask_to_idx(uint mask) {
+        switch (mask) {
+            case 0xff00_0000: return 3;
+            case 0x00ff_0000: return 2;
+            case 0x0000_ff00: return 1;
+            case 0x0000_00ff: return 0;
+            default: throw new ImageIOException("unsupported mask");
+        }
+    }
+
+    size_t redi = 2;
+    size_t greeni = 1;
+    size_t bluei = 0;
+    if (rgb_masked) {
+        if (hdr.dib_version < 2)
+            throw new ImageIOException("invalid format");
+        redi = mask_to_idx(hdr.dib_v2.red_mask);
+        greeni = mask_to_idx(hdr.dib_v2.green_mask);
+        bluei = mask_to_idx(hdr.dib_v2.blue_mask);
+    }
+
+    bool alpha_masked = false;
+    size_t alphai = 0;
+    if (3 <= hdr.dib_version && hdr.dib_v3_alpha_mask != 0) {
+        alpha_masked = true;
+        alphai = mask_to_idx(hdr.dib_v3_alpha_mask);
+    }
+
+    ubyte[] depaletted_line = null;
+    ubyte[] palette = null;
+    if (paletted) {
+        depaletted_line = new ubyte[hdr.width * pe_bytes_pp];
+        palette = new ubyte[palette_length * pe_bytes_pp];
+        stream.readExact(palette[], palette.length);
+    }
+
+    stream.seek(hdr.pixel_data_offset, SEEK_SET);
+
+    immutable tgt_chans = (0 < req_chans) ? req_chans
+                                          : (alpha_masked) ? _ColFmt.RGBA
+                                                           : _ColFmt.RGB;
+
+    const LineConv convert = get_converter(_ColFmt.BGRA, tgt_chans);
+
+    immutable size_t src_linesize = hdr.width * bytes_pp;  // without padding
+    immutable size_t src_pad = (paletted) ? 0 : 3 - ((src_linesize-1) % 4);
+    immutable ptrdiff_t tgt_linesize = (hdr.width * cast(int) tgt_chans);
+
+    immutable ptrdiff_t tgt_stride = (hdr.height < 0) ? tgt_linesize : -tgt_linesize;
+    ptrdiff_t ti                   = (hdr.height < 0) ? 0 : (hdr.height-1) * tgt_linesize;
+
+    auto src_line_buf  = new ubyte[src_linesize + src_pad];
+    auto bgra_line_buf = (paletted) ? null : new ubyte[hdr.width * 4];
+    auto result        = new ubyte[hdr.width * abs(hdr.height) * cast(int) tgt_chans];
+
+    foreach (_; 0 .. abs(hdr.height)) {
+        stream.readExact(src_line_buf[], src_line_buf.length);
+        auto src_line = src_line_buf[0..src_linesize];
+
+        if (paletted) {
+            size_t ps = pe_bytes_pp;
+            size_t di = 0;
+            foreach (idx; src_line[]) {
+                size_t i = idx * ps;
+                depaletted_line[di .. di+ps] = palette[i .. i+ps];
+                if (ps == 4) {
+                    depaletted_line[di+3] = 255;
+                }
+                di += ps;
+            }
+            convert(depaletted_line[], result[ti .. (ti+tgt_linesize)]);
+        } else {
+            for (size_t si, di;   si < src_line.length;   si+=bytes_pp, di+=4) {
+                bgra_line_buf[di + 0] = src_line[si + bluei];
+                bgra_line_buf[di + 1] = src_line[si + greeni];
+                bgra_line_buf[di + 2] = src_line[si + redi];
+                bgra_line_buf[di + 3] = (alpha_masked) ? src_line[si + alphai]
+                                                       : 255;
+            }
+            convert(bgra_line_buf[], result[ti .. (ti+tgt_linesize)]);
+        }
+
+        ti += tgt_stride;
+    }
+
+    IFImage ret = {
+        w      : hdr.width,
+        h      : abs(hdr.height),
+        c      : cast(ColFmt) tgt_chans,
+        pixels : result,
+    };
+    return ret;
+}
+
+void read_bmp_info(Reader stream, out long w, out long h, out long chans) {
+    BMP_Header hdr = read_bmp_header(stream);
+    w = abs(hdr.width);
+    h = abs(hdr.height);
+    chans = (hdr.dib_version >= 3 && hdr.dib_v3_alpha_mask != 0) ? ColFmt.RGBA
+                                                                 : ColFmt.RGB;
+}
+
+// --------------------------------------------------------------------------------
+// Baseline JPEG decoder
 
 import std.math;    // floor, ceil
 import core.stdc.stdlib : alloca;
