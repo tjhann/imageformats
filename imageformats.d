@@ -1400,84 +1400,6 @@ import core.stdc.stdlib : alloca;
 
 //debug = DebugJPEG;
 
-public struct JPEG_Header {    // JFIF
-    ubyte version_major;
-    ubyte version_minor;
-    ushort width, height;
-    ubyte num_comps;
-    ubyte precision;    // sample precision
-    ubyte density_unit;     // 0 = no units but aspect ratio, 1 = dots/inch, 2 = dots/cm
-    ushort density_x;
-    ushort density_y;
-    ubyte type; // 0xc0 = baseline, 0xc2 = progressive, ..., see Marker
-}
-
-public JPEG_Header read_jpeg_header(in char[] filename) {
-    scope reader = new Reader(filename);
-    return read_jpeg_header(reader);
-}
-
-JPEG_Header read_jpeg_header(Reader stream) {
-    ubyte[20 + 8] tmp = void;   // SOI, APP0 + SOF0
-    stream.readExact(tmp, 20);
-
-    ushort len = bigEndianToNative!ushort(tmp[4..6]);
-    if ( tmp[0..4] != [0xff,0xd8,0xff,0xe0] ||
-         tmp[6..11] != ['J','F','I','F',0]  ||
-         len < 16 )
-        throw new ImageIOException("not JPEG/JFIF");
-
-    int thumbsize = tmp[18] * tmp[19] * 3;
-    if (thumbsize != cast(int) len - 16)
-        throw new ImageIOException("corrupt header");
-    if (thumbsize)
-        stream.seek(thumbsize, SEEK_CUR);
-
-    JPEG_Header header = {
-        version_major      : tmp[11],
-        version_minor      : tmp[12],
-        density_unit       : tmp[13],
-        density_x          : bigEndianToNative!ushort(tmp[14..16]),
-        density_y          : bigEndianToNative!ushort(tmp[16..18]),
-    };
-
-    while (true) {
-        ubyte[2] marker;
-        stream.readExact(marker, 2);
-
-        if (marker[0] != 0xff)
-            throw new ImageIOException("no frame header");
-        while (marker[1] == 0xff)
-            stream.readExact(marker[1..$], 1);
-
-        enum SKIP = 0xff;
-        switch (marker[1]) with (Marker) {
-            case SOF0: .. case SOF3: goto case;
-            case SOF9: .. case SOF11:
-                header.type = marker[1];
-                stream.readExact(tmp[20..28], 8);
-                //int len = bigEndianToNative!ushort(tmp[20..22]);
-                header.precision = tmp[22];
-                header.height = bigEndianToNative!ushort(tmp[23..25]);
-                header.width = bigEndianToNative!ushort(tmp[25..27]);
-                header.num_comps = tmp[27];
-                // ignore the rest
-                return header;
-            case SOS, EOI: throw new ImageIOException("no frame header");
-            case DRI, DHT, DQT, COM: goto case SKIP;
-            case APP0: .. case APPf: goto case SKIP;
-            case SKIP:
-                ubyte[2] lenbuf = void;
-                stream.readExact(lenbuf, 2);
-                int skiplen = bigEndianToNative!ushort(lenbuf) - 2;
-                stream.seek(skiplen, SEEK_CUR);
-                break;
-            default: throw new ImageIOException("unsupported marker");
-        }
-    }
-    assert(0);
-}
-
 public IFImage read_jpeg(in char[] filename, long req_chans = 0) {
     scope reader = new Reader(filename);
     return read_jpeg(reader, req_chans);
@@ -1492,27 +1414,11 @@ IFImage read_jpeg(Reader stream, long req_chans = 0) {
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
-    ubyte[20] tmp = void;   // SOI, APP0, len, data
+    // SOI
+    ubyte[2] tmp = void;
     stream.readExact(tmp, tmp.length);
-
-    ushort len = bigEndianToNative!ushort(tmp[4..6]);
-    if ( tmp[0..4] != [0xff,0xd8,0xff,0xe0] ||
-         tmp[6..11] != ['J','F','I','F',0]  ||
-         len < 16 )
-        throw new ImageIOException("not JPEG/JFIF");
-
-    if (tmp[11] != 1)   // major version (minor is at tmp[12])
-        throw new ImageIOException("version not supported");
-
-    //ubyte density_unit = tmp[13];
-    //int density_x = bigEndianToNative!ushort(tmp[14..16]);
-    //int density_y = bigEndianToNative!ushort(tmp[16..18]);
-
-    int thumbsize = tmp[18] * tmp[19] * 3;
-    if (thumbsize != cast(int) len - 16)
-        throw new ImageIOException("corrupt header");
-    if (thumbsize)
-        stream.seek(thumbsize, SEEK_CUR);
+    if (tmp[0..2] != [0xff, 0xd8])
+        throw new ImageIOException("not JPEG");
 
     JPEG_Decoder dc = { stream: stream };
 
@@ -2324,10 +2230,45 @@ pure ubyte stbi__clamp(int x) {
 // ------------------------------------------------------------
 
 void read_jpeg_info(Reader stream, out long w, out long h, out long chans) {
-    JPEG_Header hdr = read_jpeg_header(stream);
-    w = hdr.width;
-    h = hdr.height;
-    chans = hdr.num_comps;
+    ubyte[2] marker = void;
+    stream.readExact(marker, 2);
+
+    // SOI
+    if (marker[0..2] != [0xff, 0xd8])
+        throw new ImageIOException("not JPEG");
+
+    while (true) {
+        stream.readExact(marker, 2);
+
+        if (marker[0] != 0xff)
+            throw new ImageIOException("no frame header");
+        while (marker[1] == 0xff)
+            stream.readExact(marker[1..$], 1);
+
+        enum SKIP = 0xff;
+        switch (marker[1]) with (Marker) {
+            case SOF0: .. case SOF3: goto case;
+            case SOF9: .. case SOF11:
+                ubyte[8] tmp;
+                stream.readExact(tmp[0..8], 8);
+                //int len = bigEndianToNative!ushort(tmp[0..2]);
+                w = bigEndianToNative!ushort(tmp[5..7]);
+                h = bigEndianToNative!ushort(tmp[3..5]);
+                chans = tmp[7];
+                return;
+            case SOS, EOI: throw new ImageIOException("no frame header");
+            case DRI, DHT, DQT, COM: goto case SKIP;
+            case APP0: .. case APPf: goto case SKIP;
+            case SKIP:
+                ubyte[2] lenbuf = void;
+                stream.readExact(lenbuf, 2);
+                int skiplen = bigEndianToNative!ushort(lenbuf) - 2;
+                stream.seek(skiplen, SEEK_CUR);
+                break;
+            default: throw new ImageIOException("unsupported marker");
+        }
+    }
+    assert(0);
 }
 
 // --------------------------------------------------------------------------------
