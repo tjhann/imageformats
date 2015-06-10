@@ -1450,6 +1450,7 @@ struct JPEG_Decoder {
     ubyte cb;  // current byte (next bit always at MSB)
     int bits_left;   // num of unused bits in cb
 
+    bool correct_comp_ids;
     Component[3] comps;
     ubyte num_comps;
     int[3] index_for;   // index_for[0] is index of comp that comes first in stream
@@ -1686,12 +1687,18 @@ void read_frame_header(ref JPEG_Decoder dc) {
     int mcu_du = 0; // data units in one mcu
     dc.stream.readExact(tmp, dc.num_comps*3);
     foreach (i; 0..dc.num_comps) {
-        uint ci = tmp[i*3]-1;
-        if (dc.num_comps <= ci)
-            throw new ImageIOException("invalid / not supported");
+        ubyte ci = tmp[i*3];
+        // JFIF says ci should be i+1, but there are images where ci is i. Normalize ids
+        // so that ci == i, always. So much for standards...
+        if (i == 0) { dc.correct_comp_ids = ci == i+1; }
+        if ((dc.correct_comp_ids && ci != i+1)
+        || (!dc.correct_comp_ids && ci != i))
+            throw new ImageIOException("invalid component id");
+        if (dc.correct_comp_ids) { ci -= 1; }
+
         dc.index_for[i] = ci;
         auto comp = &dc.comps[ci];
-        comp.id = tmp[i*3];
+        comp.id = ci;
         ubyte sampling_factors = tmp[i*3 + 1];
         comp.sfx = sampling_factors >> 4;
         comp.sfy = sampling_factors & 0xf;
@@ -1749,11 +1756,11 @@ void read_scan_header(ref JPEG_Decoder dc) {
     dc.stream.readExact(buf, buf.length);
 
     foreach (i; 0..num_scan_comps) {
-        ubyte comp_id = buf[i*2];
+        uint comp_id = buf[i*2] - ((dc.correct_comp_ids) ? 1 : 0);
         int ci;    // component index
         while (ci < dc.num_comps && dc.comps[ci].id != comp_id) ++ci;
         if (dc.num_comps <= ci)
-            throw new ImageIOException("invalid / not supported");
+            throw new ImageIOException("invalid component id");
 
         ubyte tables = buf[i*2+1];
         dc.comps[ci].dc_table = tables >> 4;
