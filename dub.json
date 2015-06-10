@@ -1,6 +1,6 @@
 {
 	"name": "imageformats",
-	"description": "Image formats: JPEG (no encoder), PNG, TGA. One file, no deps.",
+	"description": "Decoders for PNG, TGA, BMP, JPEG and encoders for PNG, TGA. No deps.",
 	"authors": ["Tero Hänninen"],
 	"license": "BSL-1.0",
 	"importPaths": ["."],
