@@ -1150,7 +1150,6 @@ public struct DibV4 {
     uint gamma_red;
     uint gamma_green;
     uint gamma_blue;
-    uint intent;
 }
 
 public struct DibV5 {
@@ -1218,7 +1217,6 @@ BMP_Header read_bmp_header(Reader stream) {
             gamma_red             : littleEndianToNative!uint(dib_header[92..96]),
             gamma_green           : littleEndianToNative!uint(dib_header[96..100]),
             gamma_blue            : littleEndianToNative!uint(dib_header[100..104]),
-            intent                : littleEndianToNative!uint(dib_header[104..108]),
         };
         dib_v4 = v4;
     }
@@ -1332,10 +1330,11 @@ IFImage read_bmp(Reader stream, long req_chans = 0) {
                                           : (alpha_masked) ? _ColFmt.RGBA
                                                            : _ColFmt.RGB;
 
-    const LineConv convert = get_converter(_ColFmt.BGRA, tgt_chans);
+    const src_fmt = (!paletted || pe_bytes_pp == 4) ? _ColFmt.BGRA : _ColFmt.BGR;
+    const LineConv convert = get_converter(src_fmt, tgt_chans);
 
     immutable size_t src_linesize = hdr.width * bytes_pp;  // without padding
-    immutable size_t src_pad = (paletted) ? 0 : 3 - ((src_linesize-1) % 4);
+    immutable size_t src_pad = 3 - ((src_linesize-1) % 4);
     immutable ptrdiff_t tgt_linesize = (hdr.width * cast(int) tgt_chans);
 
     immutable ptrdiff_t tgt_stride = (hdr.height < 0) ? tgt_linesize : -tgt_linesize;
@@ -1353,6 +1352,8 @@ IFImage read_bmp(Reader stream, long req_chans = 0) {
             size_t ps = pe_bytes_pp;
             size_t di = 0;
             foreach (idx; src_line[]) {
+                if (idx > palette_length)
+                    throw new ImageIOException("invalid palette index");
                 size_t i = idx * ps;
                 depaletted_line[di .. di+ps] = palette[i .. i+ps];
                 if (ps == 4) {
