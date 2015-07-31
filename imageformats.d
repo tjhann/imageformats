@@ -32,7 +32,7 @@ IFImage read_image(in char[] file, long req_chans = 0) {
         case "jpeg": read_image = &read_jpeg; break;
         default: throw new ImageIOException("unknown image extension/type");
     }
-    scope reader = new Reader(file);
+    scope reader = new FileReader(file);
     return read_image(reader, req_chans);
 }
 
@@ -45,7 +45,7 @@ void write_image(in char[] file, long w, long h, in ubyte[] data, long req_chans
         case "tga": write_image = &write_tga; break;
         default: throw new ImageIOException("unknown image extension/type");
     }
-    scope writer = new Writer(file);
+    scope writer = new FileWriter(file);
     write_image(writer, w, h, data, req_chans);
 }
 
@@ -62,7 +62,7 @@ void read_image_info(in char[] file, out long w, out long h, out long chans) {
         case "jpeg": read_image_info = &read_jpeg_info; break;
         default: throw new ImageIOException("unknown image extension/type");
     }
-    scope reader = new Reader(file);
+    scope reader = new FileReader(file);
     return read_image_info(reader, w, h, chans);
 }
 
@@ -93,7 +93,7 @@ public struct PNG_Header {
 }
 
 public PNG_Header read_png_header(in char[] filename) {
-    scope reader = new Reader(filename);
+    scope reader = new FileReader(filename);
     return read_png_header(reader);
 }
 
@@ -121,12 +121,12 @@ PNG_Header read_png_header(Reader stream) {
 }
 
 public IFImage read_png(in char[] filename, long req_chans = 0) {
-    scope reader = new Reader(filename);
+    scope reader = new FileReader(filename);
     return read_png(reader, req_chans);
 }
 
 public IFImage read_png_from_mem(in ubyte[] source, long req_chans = 0) {
-    scope reader = new Reader(source);
+    scope reader = new MemReader(source);
     return read_png(reader, req_chans);
 }
 
@@ -171,12 +171,12 @@ IFImage read_png(Reader stream, long req_chans = 0) {
 
 public void write_png(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
 {
-    scope writer = new Writer(file);
+    scope writer = new FileWriter(file);
     write_png(writer, w, h, data, tgt_chans);
 }
 
 public ubyte[] write_png_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
-    scope writer = new Writer();
+    scope writer = new MemWriter();
     write_png(writer, w, h, data, tgt_chans);
     return writer.result;
 }
@@ -703,7 +703,7 @@ public struct TGA_Header {
 }
 
 public TGA_Header read_tga_header(in char[] filename) {
-    scope reader = new Reader(filename);
+    scope reader = new FileReader(filename);
     return read_tga_header(reader);
 }
 
@@ -729,12 +729,12 @@ TGA_Header read_tga_header(Reader stream) {
 }
 
 public IFImage read_tga(in char[] filename, long req_chans = 0) {
-    scope reader = new Reader(filename);
+    scope reader = new FileReader(filename);
     return read_tga(reader, req_chans);
 }
 
 public IFImage read_tga_from_mem(in ubyte[] source, long req_chans = 0) {
-    scope reader = new Reader(source);
+    scope reader = new MemReader(source);
     return read_tga(reader, req_chans);
 }
 
@@ -815,12 +815,12 @@ IFImage read_tga(Reader stream, long req_chans = 0) {
 
 public void write_tga(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
 {
-    scope writer = new Writer(file);
+    scope writer = new FileWriter(file);
     write_tga(writer, w, h, data, tgt_chans);
 }
 
 public ubyte[] write_tga_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
-    scope writer = new Writer();
+    scope writer = new MemWriter();
     write_tga(writer, w, h, data, tgt_chans);
     return writer.result;
 }
@@ -1098,17 +1098,17 @@ void read_tga_info(Reader stream, out long w, out long h, out long chans) {
 // BMP
 
 public IFImage read_bmp(in char[] filename, long req_chans = 0) {
-    scope reader = new Reader(filename);
+    scope reader = new FileReader(filename);
     return read_bmp(reader, req_chans);
 }
 
 public IFImage read_bmp_from_mem(in ubyte[] source, long req_chans = 0) {
-    scope reader = new Reader(source);
+    scope reader = new MemReader(source);
     return read_bmp(reader, req_chans);
 }
 
 public BMP_Header read_bmp_header(in char[] filename) {
-    scope reader = new Reader(filename);
+    scope reader = new FileReader(filename);
     return read_bmp_header(reader);
 }
 
@@ -1402,12 +1402,12 @@ import core.stdc.stdlib : alloca;
 //debug = DebugJPEG;
 
 public IFImage read_jpeg(in char[] filename, long req_chans = 0) {
-    scope reader = new Reader(filename);
+    scope reader = new FileReader(filename);
     return read_jpeg(reader, req_chans);
 }
 
 public IFImage read_jpeg_from_mem(in ubyte[] source, long req_chans = 0) {
-    scope reader = new Reader(source);
+    scope reader = new MemReader(source);
     return read_jpeg(reader, req_chans);
 }
 
@@ -2481,10 +2481,17 @@ void BGRA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
 
 // --------------------------------------------------------------------------------
 
-class Reader {
-    const void delegate(ubyte[], size_t) readExact;
-    const void delegate(ptrdiff_t, int) seek;
+interface Reader {
+    void readExact(ubyte[], size_t);
+    void seek(ptrdiff_t, int);
+}
 
+interface Writer {
+    void rawWrite(in ubyte[]);
+    void flush();
+}
+
+class FileReader : Reader {
     this(in char[] filename) {
         this(File(filename.idup, "rb"));
     }
@@ -2492,36 +2499,32 @@ class Reader {
     this(File f) {
         if (!f.isOpen) throw new ImageIOException("File not open");
         this.f = f;
-        this.readExact = &file_readExact;
-        this.seek = &file_seek;
-        this.source = null;
     }
 
-    this(in ubyte[] source) {
-        this.source = source;
-        this.readExact = &mem_readExact;
-        this.seek = &mem_seek;
-    }
-
-    private:
-
-    File f;
-    void file_readExact(ubyte[] buffer, size_t bytes) {
+    void readExact(ubyte[] buffer, size_t bytes) {
         auto slice = this.f.rawRead(buffer[0..bytes]);
         if (slice.length != bytes)
             throw new Exception("not enough data");
     }
-    void file_seek(ptrdiff_t offset, int origin) { this.f.seek(offset, origin); }
 
-    const ubyte[] source;
-    ptrdiff_t cursor;
-    void mem_readExact(ubyte[] buffer, size_t bytes) {
+    void seek(ptrdiff_t offset, int origin) { this.f.seek(offset, origin); }
+
+    private File f;
+}
+
+class MemReader : Reader {
+    this(in ubyte[] source) {
+        this.source = source;
+    }
+
+    void readExact(ubyte[] buffer, size_t bytes) {
         if (source.length - cursor < bytes)
             throw new Exception("not enough data");
         buffer[0..bytes] = source[cursor .. cursor+bytes];
         cursor += bytes;
     }
-    void mem_seek(ptrdiff_t offset, int origin) {
+
+    void seek(ptrdiff_t offset, int origin) {
         switch (origin) {
             case SEEK_SET:
                 if (offset < 0 || source.length <= offset)
@@ -2542,12 +2545,12 @@ class Reader {
             default: assert(0);
         }
     }
+
+    private const ubyte[] source;
+    private ptrdiff_t cursor;
 }
 
-class Writer {
-    const void delegate(in ubyte[]) rawWrite;
-    const void delegate() flush;
-
+class FileWriter : Writer {
     this(in char[] filename) {
         this(File(filename.idup, "wb"));
     }
@@ -2555,26 +2558,23 @@ class Writer {
     this(File f) {
         if (!f.isOpen) throw new ImageIOException("File not open");
         this.f = f;
-        this.rawWrite = &file_rawWrite;
-        this.flush = &file_flush;
     }
 
-    this() {
-        this.rawWrite = &mem_rawWrite;
-        this.flush = &mem_flush;
-    }
+    void rawWrite(in ubyte[] block) { this.f.rawWrite(block); }
+    void flush() { this.f.flush(); }
 
-    @property ubyte[] result() { return buffer; }
+    private File f;
+}
 
-    private:
+class MemWriter : Writer {
+    this() { }
 
-    File f;
-    void file_rawWrite(in ubyte[] block) { this.f.rawWrite(block); }
-    void file_flush() { this.f.flush(); }
+    ubyte[] result() { return buffer; }
 
-    ubyte[] buffer;
-    void mem_rawWrite(in ubyte[] block) { this.buffer ~= block; }
-    void mem_flush() { }
+    void rawWrite(in ubyte[] block) { this.buffer ~= block; }
+    void flush() { }
+
+    private ubyte[] buffer;
 }
 
 const(char)[] extract_extension_lowercase(in char[] filename) {
