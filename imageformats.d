@@ -677,6 +677,11 @@ void write_IDAT_chunk(ref PNG_Encoder ec) {
     ec.writelen = 0;
 }
 
+public void read_png_info(in char[] filename, out long w, out long h, out long chans) {
+    scope reader = new FileReader(filename);
+    return read_png_info(reader, w, h, chans);
+}
+
 void read_png_info(Reader stream, out long w, out long h, out long chans) {
     PNG_Header hdr = read_png_header(stream);
     w = hdr.width;
@@ -1069,6 +1074,11 @@ enum TGA_DataType : ubyte {
     Gray_RLE      = 11,
 }
 
+public void read_tga_info(in char[] filename, out long w, out long h, out long chans) {
+    scope reader = new FileReader(filename);
+    return read_tga_info(reader, w, h, chans);
+}
+
 void read_tga_info(Reader stream, out long w, out long h, out long chans) {
     TGA_Header hdr = read_tga_header(stream);
     w = hdr.width;
@@ -1383,6 +1393,11 @@ IFImage read_bmp(Reader stream, long req_chans = 0) {
         pixels : result,
     };
     return ret;
+}
+
+public void read_bmp_info(in char[] filename, out long w, out long h, out long chans) {
+    scope reader = new FileReader(filename);
+    return read_bmp_info(reader, w, h, chans);
 }
 
 void read_bmp_info(Reader stream, out long w, out long h, out long chans) {
@@ -2236,6 +2251,11 @@ pure ubyte stbi__clamp(int x) {
 
 // the above is adapted from stb_image
 // ------------------------------------------------------------
+
+public void read_jpeg_info(in char[] filename, out long w, out long h, out long chans) {
+    scope reader = new FileReader(filename);
+    return read_jpeg_info(reader, w, h, chans);
+}
 
 void read_jpeg_info(Reader stream, out long w, out long h, out long chans) {
     ubyte[2] marker = void;
