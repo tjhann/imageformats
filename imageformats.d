@@ -7,12 +7,14 @@ import std.bitmanip;   // endianness stuff
 import std.stdio;    // File
 import std.string;  // toLower, lastIndexOf
 
+/// Image
 struct IFImage {
     long        w, h;
     ColFmt      c;
     ubyte[]     pixels;
 }
 
+/// Color format
 enum ColFmt {
     Y = 1,
     YA = 2,
@@ -20,6 +22,7 @@ enum ColFmt {
     RGBA = 4,
 }
 
+/// Reads an image from file.
 IFImage read_image(in char[] file, long req_chans = 0) {
     const(char)[] ext = extract_extension_lowercase(file);
 
@@ -36,6 +39,7 @@ IFImage read_image(in char[] file, long req_chans = 0) {
     return read_image(reader, req_chans);
 }
 
+/// Writes an image to file.
 void write_image(in char[] file, long w, long h, in ubyte[] data, long req_chans = 0) {
     const(char)[] ext = extract_extension_lowercase(file);
 
@@ -49,7 +53,8 @@ void write_image(in char[] file, long w, long h, in ubyte[] data, long req_chans
     write_image(writer, w, h, data, req_chans);
 }
 
-// chans is set to zero if num of channels is unknown
+/// Returns basic info about an image.
+/// If number of channels is unknown chans is set to zero.
 void read_image_info(in char[] file, out long w, out long h, out long chans) {
     const(char)[] ext = extract_extension_lowercase(file);
 
@@ -66,6 +71,7 @@ void read_image_info(in char[] file, out long w, out long h, out long chans) {
     return read_image_info(reader, w, h, chans);
 }
 
+///
 class ImageIOException : Exception {
    @safe pure const
    this(string msg, string file = __FILE__, size_t line = __LINE__) {
@@ -82,6 +88,7 @@ private:
 import std.digest.crc;
 import std.zlib;
 
+///
 public struct PNG_Header {
     int     width;
     int     height;
@@ -92,6 +99,7 @@ public struct PNG_Header {
     ubyte   interlace_method;
 }
 
+///
 public PNG_Header read_png_header(in char[] filename) {
     scope reader = new FileReader(filename);
     return read_png_header(reader);
@@ -120,11 +128,13 @@ PNG_Header read_png_header(Reader stream) {
     return header;
 }
 
+///
 public IFImage read_png(in char[] filename, long req_chans = 0) {
     scope reader = new FileReader(filename);
     return read_png(reader, req_chans);
 }
 
+///
 public IFImage read_png_from_mem(in ubyte[] source, long req_chans = 0) {
     scope reader = new MemReader(source);
     return read_png(reader, req_chans);
@@ -169,12 +179,14 @@ IFImage read_png(Reader stream, long req_chans = 0) {
     return result;
 }
 
+///
 public void write_png(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
 {
     scope writer = new FileWriter(file);
     write_png(writer, w, h, data, tgt_chans);
 }
 
+///
 public ubyte[] write_png_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
     scope writer = new MemWriter();
     write_png(writer, w, h, data, tgt_chans);
@@ -677,6 +689,7 @@ void write_IDAT_chunk(ref PNG_Encoder ec) {
     ec.writelen = 0;
 }
 
+///
 public void read_png_info(in char[] filename, out long w, out long h, out long chans) {
     scope reader = new FileReader(filename);
     return read_png_info(reader, w, h, chans);
@@ -692,6 +705,7 @@ void read_png_info(Reader stream, out long w, out long h, out long chans) {
 // --------------------------------------------------------------------------------
 // TGA
 
+///
 public struct TGA_Header {
    ubyte id_length;
    ubyte palette_type;
@@ -707,6 +721,7 @@ public struct TGA_Header {
    ubyte flags;
 }
 
+///
 public TGA_Header read_tga_header(in char[] filename) {
     scope reader = new FileReader(filename);
     return read_tga_header(reader);
@@ -733,11 +748,13 @@ TGA_Header read_tga_header(Reader stream) {
     return header;
 }
 
+///
 public IFImage read_tga(in char[] filename, long req_chans = 0) {
     scope reader = new FileReader(filename);
     return read_tga(reader, req_chans);
 }
 
+///
 public IFImage read_tga_from_mem(in ubyte[] source, long req_chans = 0) {
     scope reader = new MemReader(source);
     return read_tga(reader, req_chans);
@@ -818,12 +835,14 @@ IFImage read_tga(Reader stream, long req_chans = 0) {
     return result;
 }
 
+///
 public void write_tga(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
 {
     scope writer = new FileWriter(file);
     write_tga(writer, w, h, data, tgt_chans);
 }
 
+///
 public ubyte[] write_tga_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
     scope writer = new MemWriter();
     write_tga(writer, w, h, data, tgt_chans);
@@ -1074,6 +1093,7 @@ enum TGA_DataType : ubyte {
     Gray_RLE      = 11,
 }
 
+///
 public void read_tga_info(in char[] filename, out long w, out long h, out long chans) {
     scope reader = new FileReader(filename);
     return read_tga_info(reader, w, h, chans);
@@ -1107,21 +1127,25 @@ void read_tga_info(Reader stream, out long w, out long h, out long chans) {
 // --------------------------------------------------------------------------------
 // BMP
 
+///
 public IFImage read_bmp(in char[] filename, long req_chans = 0) {
     scope reader = new FileReader(filename);
     return read_bmp(reader, req_chans);
 }
 
+///
 public IFImage read_bmp_from_mem(in ubyte[] source, long req_chans = 0) {
     scope reader = new MemReader(source);
     return read_bmp(reader, req_chans);
 }
 
+///
 public BMP_Header read_bmp_header(in char[] filename) {
     scope reader = new FileReader(filename);
     return read_bmp_header(reader);
 }
 
+///
 public struct BMP_Header {
     size_t file_size;
     size_t pixel_data_offset;
@@ -1138,6 +1162,7 @@ public struct BMP_Header {
     DibV5 dib_v5;
 }
 
+/// Part of BMP header, not always present.
 public struct DibV1 {
     size_t bits_pp;
     uint compression;
@@ -1148,12 +1173,14 @@ public struct DibV1 {
     uint important_color_count;
 }
 
+/// Part of BMP header, not always present.
 public struct DibV2 {
     uint red_mask;
     uint green_mask;
     uint blue_mask;
 }
 
+/// Part of BMP header, not always present.
 public struct DibV4 {
     uint color_space_type;
     ubyte[36] color_space_endpoints;
@@ -1162,6 +1189,7 @@ public struct DibV4 {
     uint gamma_blue;
 }
 
+/// Part of BMP header, not always present.
 public struct DibV5 {
     uint icc_profile_data;
     uint icc_profile_size;
@@ -1395,6 +1423,7 @@ IFImage read_bmp(Reader stream, long req_chans = 0) {
     return ret;
 }
 
+///
 public void read_bmp_info(in char[] filename, out long w, out long h, out long chans) {
     scope reader = new FileReader(filename);
     return read_bmp_info(reader, w, h, chans);
@@ -1416,11 +1445,13 @@ import core.stdc.stdlib : alloca;
 
 //debug = DebugJPEG;
 
+///
 public IFImage read_jpeg(in char[] filename, long req_chans = 0) {
     scope reader = new FileReader(filename);
     return read_jpeg(reader, req_chans);
 }
 
+///
 public IFImage read_jpeg_from_mem(in ubyte[] source, long req_chans = 0) {
     scope reader = new MemReader(source);
     return read_jpeg(reader, req_chans);
@@ -2252,6 +2283,7 @@ pure ubyte stbi__clamp(int x) {
 // the above is adapted from stb_image
 // ------------------------------------------------------------
 
+///
 public void read_jpeg_info(in char[] filename, out long w, out long h, out long chans) {
     scope reader = new FileReader(filename);
     return read_jpeg_info(reader, w, h, chans);
