@@ -24,19 +24,12 @@ enum ColFmt {
 
 /// Reads an image from file.
 IFImage read_image(in char[] file, long req_chans = 0) {
-    const(char)[] ext = extract_extension_lowercase(file);
-
-    IFImage function(Reader, long) read_image;
-    switch (ext) {
-        case "png": read_image = &read_png; break;
-        case "tga": read_image = &read_tga; break;
-        case "bmp": read_image = &read_bmp; break;
-        case "jpg": read_image = &read_jpeg; break;
-        case "jpeg": read_image = &read_jpeg; break;
-        default: throw new ImageIOException("unknown image extension/type");
-    }
     scope reader = new FileReader(file);
-    return read_image(reader, req_chans);
+    if (detect_png(reader)) return read_png(reader, req_chans);
+    if (detect_jpeg(reader)) return read_jpeg(reader, req_chans);
+    if (detect_bmp(reader)) return read_bmp(reader, req_chans);
+    if (detect_tga(reader)) return read_tga(reader, req_chans);
+    throw new ImageIOException("unknown image type");
 }
 
 /// Writes an image to file.
@@ -56,19 +49,28 @@ void write_image(in char[] file, long w, long h, in ubyte[] data, long req_chans
 /// Returns basic info about an image.
 /// If number of channels is unknown chans is set to zero.
 void read_image_info(in char[] file, out long w, out long h, out long chans) {
-    const(char)[] ext = extract_extension_lowercase(file);
-
-    void function(Reader, out long, out long, out long) read_image_info;
-    switch (ext) {
-        case "png": read_image_info = &read_png_info; break;
-        case "tga": read_image_info = &read_tga_info; break;
-        case "bmp": read_image_info = &read_bmp_info; break;
-        case "jpg": read_image_info = &read_jpeg_info; break;
-        case "jpeg": read_image_info = &read_jpeg_info; break;
-        default: throw new ImageIOException("unknown image extension/type");
-    }
     scope reader = new FileReader(file);
-    return read_image_info(reader, w, h, chans);
+    try {
+        return read_png_info(reader, w, h, chans);
+    } catch {
+        reader.seek(0, SEEK_SET);
+    }
+    try {
+        return read_jpeg_info(reader, w, h, chans);
+    } catch {
+        reader.seek(0, SEEK_SET);
+    }
+    try {
+        return read_bmp_info(reader, w, h, chans);
+    } catch {
+        reader.seek(0, SEEK_SET);
+    }
+    try {
+        return read_tga_info(reader, w, h, chans);
+    } catch {
+        reader.seek(0, SEEK_SET);
+    }
+    throw new ImageIOException("unknown image type");
 }
 
 ///
@@ -79,8 +81,56 @@ class ImageIOException : Exception {
    }
 }
 
-// From here, things are private by default and public only explicitly.
 private:
+
+bool detect_png(Reader stream) {
+    try {
+        ubyte[8] tmp = void;
+        stream.readExact(tmp, tmp.length);
+        return (tmp[0..8] == png_file_header[0..$]);
+    } catch {
+        return false;
+    } finally {
+        stream.seek(0, SEEK_SET);
+    }
+}
+
+bool detect_jpeg(Reader stream) {
+    try {
+        long w, h, c;
+        read_jpeg_info(stream, w, h, c);
+        return true;
+    } catch {
+        return false;
+    } finally {
+        stream.seek(0, SEEK_SET);
+    }
+}
+
+bool detect_bmp(Reader stream) {
+    try {
+        ubyte[18] tmp = void;  // bmp header + size of dib header
+        stream.readExact(tmp, tmp.length);
+        size_t ds = littleEndianToNative!uint(tmp[14..18]);
+        return (tmp[0..2] == ['B', 'M']
+            && (ds == 12 || ds == 40 || ds == 52 || ds == 56 || ds == 108 || ds == 124));
+    } catch {
+        return false;
+    } finally {
+        stream.seek(0, SEEK_SET);
+    }
+}
+
+bool detect_tga(Reader stream) {
+    try {
+        auto hdr = read_tga_header(stream);
+        return true;
+    } catch {
+        return false;
+    } finally {
+        stream.seek(0, SEEK_SET);
+    }
+}
 
 // --------------------------------------------------------------------------------
 // PNG
@@ -731,7 +781,7 @@ TGA_Header read_tga_header(Reader stream) {
     ubyte[18] tmp = void;
     stream.readExact(tmp, tmp.length);
 
-    TGA_Header header = {
+    TGA_Header hdr = {
         id_length       : tmp[0],
         palette_type    : tmp[1],
         data_type       : tmp[2],
@@ -745,7 +795,15 @@ TGA_Header read_tga_header(Reader stream) {
         bits_pp         : tmp[16],
         flags           : tmp[17],
     };
-    return header;
+
+    if (hdr.width < 1 || hdr.height < 1 || hdr.palette_type > 1
+        || (hdr.palette_type == 0 && (hdr.palette_start
+                                     || hdr.palette_length
+                                     || hdr.palette_bits))
+        || (4 <= hdr.data_type && hdr.data_type <= 8) || 12 <= hdr.data_type)
+        throw new ImageIOException("corrupt TGA header");
+
+    return hdr;
 }
 
 ///
