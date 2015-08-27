@@ -2173,15 +2173,15 @@ ubyte[] upsample_rgb(in ref JPEG_Decoder dc, ubyte[] result) {
     size_t si0, si1, si2, di;
 
     foreach (j; 0 .. dc.height) {
-        si0 = cast(size_t) floor(j * si0yratio) * stride0;
-        si1 = cast(size_t) floor(j * si1yratio) * stride1;
-        si2 = cast(size_t) floor(j * si2yratio) * stride2;
+        si0 = cast(int)(j * si0yratio) * stride0;
+        si1 = cast(int)(j * si1yratio) * stride1;
+        si2 = cast(int)(j * si2yratio) * stride2;
 
         foreach (i; 0 .. dc.width) {
             result[di .. di+3] = ycbcr_to_rgb(
-                dc.comps[0].data[si0 + cast(size_t) floor(i * si0xratio)],
-                dc.comps[1].data[si1 + cast(size_t) floor(i * si1xratio)],
-                dc.comps[2].data[si2 + cast(size_t) floor(i * si2xratio)],
+                dc.comps[0].data[si0 + cast(int)(i * si0xratio)],
+                dc.comps[1].data[si1 + cast(int)(i * si1xratio)],
+                dc.comps[2].data[si2 + cast(int)(i * si2xratio)],
             );
             if (dc.tgt_chans == 4)
                 result[di+3] = 255;
