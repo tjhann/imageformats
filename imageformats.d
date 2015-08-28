@@ -25,11 +25,13 @@ enum ColFmt {
 /// Reads an image from file.
 IFImage read_image(in char[] file, long req_chans = 0) {
     scope reader = new FileReader(file);
-    if (detect_png(reader)) return read_png(reader, req_chans);
-    if (detect_jpeg(reader)) return read_jpeg(reader, req_chans);
-    if (detect_bmp(reader)) return read_bmp(reader, req_chans);
-    if (detect_tga(reader)) return read_tga(reader, req_chans);
-    throw new ImageIOException("unknown image type");
+    return read_image_from_reader(reader, req_chans);
+}
+
+/// Reads an image in memory.
+IFImage read_image_from_mem(in ubyte[] source, long req_chans = 0) {
+    scope reader = new MemReader(source);
+    return read_image_from_reader(reader, req_chans);
 }
 
 /// Writes an image to file.
@@ -82,6 +84,14 @@ class ImageIOException : Exception {
 }
 
 private:
+
+IFImage read_image_from_reader(Reader reader, long req_chans) {
+    if (detect_png(reader)) return read_png(reader, req_chans);
+    if (detect_jpeg(reader)) return read_jpeg(reader, req_chans);
+    if (detect_bmp(reader)) return read_bmp(reader, req_chans);
+    if (detect_tga(reader)) return read_tga(reader, req_chans);
+    throw new ImageIOException("unknown image type");
+}
 
 bool detect_png(Reader stream) {
     try {
