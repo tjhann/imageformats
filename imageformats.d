@@ -2225,7 +2225,7 @@ void upsample_h2_v2(in ubyte[] line0, in ubyte[] line1, ubyte[] result) {
                 result[di] = cast(ubyte) (( cast(uint) line0[i] * 3
                                           + cast(uint) line1[i] * 1
                                           + 2) / 4);
-            };
+            }
             return;
         }
         result[di] = mix(line0[i], line0[i+1], line1[i], line1[i+1]);
