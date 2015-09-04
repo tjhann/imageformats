@@ -2158,9 +2158,9 @@ ubyte[] upsample_gray(in ref JPEG_Decoder dc, ubyte[] result) {
     size_t si0, di;
 
     foreach (j; 0 .. dc.height) {
-        si0 = cast(size_t) floor(j * si0yratio) * stride0;
+        si0 = cast(int)(j * si0yratio) * stride0;
         foreach (i; 0 .. dc.width) {
-            result[di] = dc.comps[0].data[si0 + cast(size_t) floor(i * si0xratio)];
+            result[di] = dc.comps[0].data[si0 + cast(int)(i * si0xratio)];
             if (dc.tgt_chans == 2)
                 result[di+1] = 255;
             di += dc.tgt_chans;
