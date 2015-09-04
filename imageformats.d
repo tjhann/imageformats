@@ -2090,9 +2090,59 @@ ubyte[] reconstruct(in ref JPEG_Decoder dc) {
 
     switch (dc.num_comps * 10 + dc.tgt_chans) {
         case 34, 33:
+            // Use specialized bilinear filtering functions for the frequent cases where
+            // Cb & Cr channels have half resolution.
+            if ((dc.comps[0].sfx <= 2 && dc.comps[0].sfy <= 2)
+            && (dc.comps[0].sfx + dc.comps[0].sfy >= 3)
+            && dc.comps[1].sfx == 1 && dc.comps[1].sfy == 1
+            && dc.comps[2].sfx == 1 && dc.comps[2].sfy == 1) {
+                void function(in ubyte[], in ubyte[], ubyte[]) resample;
+                switch (dc.comps[0].sfx * 10 + dc.comps[0].sfy) {
+                    case 22: resample = &upsample_h2_v2; break;
+                    case 21: resample = &upsample_h2_v1; break;
+                    case 12: resample = &upsample_h1_v2; break;
+                    default: throw new ImageIOException("bug");
+                }
+
+                auto comp1 = new ubyte[](dc.width);
+                auto comp2 = new ubyte[](dc.width);
+
+                size_t s = 0;
+                size_t di = 0;
+                foreach (j; 0 .. dc.height) {
+                    size_t mi = j / dc.comps[0].sfy;
+                    size_t si = (mi == 0 || mi >= (dc.height-1)/dc.comps[0].sfy)
+                              ? mi : mi - 1 + s * 2;
+                    s = s ^ 1;
+
+                    size_t cs = dc.num_mcu_x * dc.comps[1].sfx * 8;
+                    size_t cl0 = mi * cs;
+                    size_t cl1 = si * cs;
+                    resample(dc.comps[1].data[cl0 .. cl0 + dc.comps[1].x],
+                             dc.comps[1].data[cl1 .. cl1 + dc.comps[1].x],
+                             comp1[]);
+                    resample(dc.comps[2].data[cl0 .. cl0 + dc.comps[2].x],
+                             dc.comps[2].data[cl1 .. cl1 + dc.comps[2].x],
+                             comp2[]);
+
+                    foreach (i; 0 .. dc.width) {
+                        result[di .. di+3] = ycbcr_to_rgb(
+                            dc.comps[0].data[j * dc.num_mcu_x * dc.comps[0].sfx * 8 + i],
+                            comp1[i],
+                            comp2[i],
+                        );
+                        if (dc.tgt_chans == 4)
+                            result[di+3] = 255;
+                        di += dc.tgt_chans;
+                    }
+                }
+
+                return result;
+            }
+
             foreach (const ref comp; dc.comps[0..dc.num_comps]) {
                 if (comp.sfx != dc.hmax || comp.sfy != dc.vmax)
-                    return dc.upsample_rgb(result);
+                    return dc.upsample(result);
             }
 
             size_t si, di;
@@ -2132,7 +2182,7 @@ ubyte[] reconstruct(in ref JPEG_Decoder dc) {
                 return result;
             } else {
                 // need to resample (haven't tested this...)
-                return dc.upsample_gray(result);
+                return dc.upsample_luma(result);
             }
         case 14, 13:
             const comp = &dc.comps[0];
@@ -2151,52 +2201,148 @@ ubyte[] reconstruct(in ref JPEG_Decoder dc) {
     }
 }
 
-ubyte[] upsample_gray(in ref JPEG_Decoder dc, ubyte[] result) {
+void upsample_h2_v2(in ubyte[] line0, in ubyte[] line1, ubyte[] result) {
+    ubyte mix(ubyte mm, ubyte ms, ubyte sm, ubyte ss) {
+       return cast(ubyte) (( cast(uint) mm * 3 * 3
+                           + cast(uint) ms * 3 * 1
+                           + cast(uint) sm * 1 * 3
+                           + cast(uint) ss * 1 * 1
+                           + 8) / 16);
+    }
+
+    result[0] = cast(ubyte) (( cast(uint) line0[0] * 3
+                             + cast(uint) line1[0] * 1
+                             + 2) / 4);
+    if (line0.length == 1) return;
+    result[1] = mix(line0[0], line0[1], line1[0], line1[1]);
+
+    size_t di = 2;
+    foreach (i; 1 .. line0.length) {
+        result[di] = mix(line0[i], line0[i-1], line1[i], line1[i-1]);
+        di += 1;
+        if (i == line0.length-1) {
+            if (di < result.length) {
+                result[di] = cast(ubyte) (( cast(uint) line0[i] * 3
+                                          + cast(uint) line1[i] * 1
+                                          + 2) / 4);
+            };
+            return;
+        }
+        result[di] = mix(line0[i], line0[i+1], line1[i], line1[i+1]);
+        di += 1;
+    }
+}
+
+void upsample_h2_v1(in ubyte[] line0, in ubyte[] _line1, ubyte[] result) {
+    result[0] = line0[0];
+    if (line0.length == 1) return;
+    result[1] = cast(ubyte) (( cast(uint) line0[0] * 3
+                             + cast(uint) line0[1] * 1
+                             + 2) / 4);
+    size_t di = 2;
+    foreach (i; 1 .. line0.length) {
+        result[di] = cast(ubyte) (( cast(uint) line0[i-1] * 1
+                                  + cast(uint) line0[i+0] * 3
+                                  + 2) / 4);
+        di += 1;
+        if (i == line0.length-1) {
+            if (di < result.length) result[di] = line0[i];
+            return;
+        }
+        result[di] = cast(ubyte) (( cast(uint) line0[i+0] * 3
+                                  + cast(uint) line0[i+1] * 1
+                                  + 2) / 4);
+        di += 1;
+    }
+}
+
+void upsample_h1_v2(in ubyte[] line0, in ubyte[] line1, ubyte[] result) {
+    foreach (i; 0 .. result.length) {
+        result[i] = cast(ubyte) (( cast(uint) line0[i] * 3
+                                 + cast(uint) line1[i] * 1
+                                 + 2) / 4);
+    }
+}
+
+// Nearest neighbor
+ubyte[] upsample_luma(in ref JPEG_Decoder dc, ubyte[] result) {
     const size_t stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
-    const double si0yratio = cast(double) dc.comps[0].y / dc.height;
-    const double si0xratio = cast(double) dc.comps[0].x / dc.width;
-    size_t si0, di;
+    const y_step0 = cast(float) dc.comps[0].sfy / cast(float) dc.vmax;
+    const x_step0 = cast(float) dc.comps[0].sfx / cast(float) dc.hmax;
+
+    float y0 = y_step0 * 0.5;
+    size_t y0i = 0;
+
+    size_t di;
 
     foreach (j; 0 .. dc.height) {
-        si0 = cast(int)(j * si0yratio) * stride0;
+        float x0 = x_step0 * 0.5;
+        size_t x0i = 0;
         foreach (i; 0 .. dc.width) {
-            result[di] = dc.comps[0].data[si0 + cast(int)(i * si0xratio)];
+            result[di] = dc.comps[0].data[y0i + x0i];
             if (dc.tgt_chans == 2)
                 result[di+1] = 255;
             di += dc.tgt_chans;
+            x0 += x_step0;
+            if (x0 >= 1.0) { x0 -= 1.0; x0i += 1; }
         }
+        y0 += y_step0;
+        if (y0 >= 1.0) { y0 -= 1.0; y0i += stride0; }
     }
     return result;
 }
 
-ubyte[] upsample_rgb(in ref JPEG_Decoder dc, ubyte[] result) {
+// Nearest neighbor
+ubyte[] upsample(in ref JPEG_Decoder dc, ubyte[] result) {
     const size_t stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
     const size_t stride1 = dc.num_mcu_x * dc.comps[1].sfx * 8;
     const size_t stride2 = dc.num_mcu_x * dc.comps[2].sfx * 8;
 
-    const double si0yratio = cast(double) dc.comps[0].y / dc.height;
-    const double si1yratio = cast(double) dc.comps[1].y / dc.height;
-    const double si2yratio = cast(double) dc.comps[2].y / dc.height;
-    const double si0xratio = cast(double) dc.comps[0].x / dc.width;
-    const double si1xratio = cast(double) dc.comps[1].x / dc.width;
-    const double si2xratio = cast(double) dc.comps[2].x / dc.width;
-    size_t si0, si1, si2, di;
+    const y_step0 = cast(float) dc.comps[0].sfy / cast(float) dc.vmax;
+    const y_step1 = cast(float) dc.comps[1].sfy / cast(float) dc.vmax;
+    const y_step2 = cast(float) dc.comps[2].sfy / cast(float) dc.vmax;
+    const x_step0 = cast(float) dc.comps[0].sfx / cast(float) dc.hmax;
+    const x_step1 = cast(float) dc.comps[1].sfx / cast(float) dc.hmax;
+    const x_step2 = cast(float) dc.comps[2].sfx / cast(float) dc.hmax;
 
-    foreach (j; 0 .. dc.height) {
-        si0 = cast(int)(j * si0yratio) * stride0;
-        si1 = cast(int)(j * si1yratio) * stride1;
-        si2 = cast(int)(j * si2yratio) * stride2;
+    float y0 = y_step0 * 0.5;
+    float y1 = y_step1 * 0.5;
+    float y2 = y_step2 * 0.5;
+    size_t y0i = 0;
+    size_t y1i = 0;
+    size_t y2i = 0;
 
+    size_t di;
+
+    foreach (_j; 0 .. dc.height) {
+        float x0 = x_step0 * 0.5;
+        float x1 = x_step1 * 0.5;
+        float x2 = x_step2 * 0.5;
+        size_t x0i = 0;
+        size_t x1i = 0;
+        size_t x2i = 0;
         foreach (i; 0 .. dc.width) {
             result[di .. di+3] = ycbcr_to_rgb(
-                dc.comps[0].data[si0 + cast(int)(i * si0xratio)],
-                dc.comps[1].data[si1 + cast(int)(i * si1xratio)],
-                dc.comps[2].data[si2 + cast(int)(i * si2xratio)],
+                dc.comps[0].data[y0i + x0i],
+                dc.comps[1].data[y1i + x1i],
+                dc.comps[2].data[y2i + x2i],
             );
             if (dc.tgt_chans == 4)
                 result[di+3] = 255;
             di += dc.tgt_chans;
+            x0 += x_step0;
+            x1 += x_step1;
+            x2 += x_step2;
+            if (x0 >= 1.0) { x0 -= 1.0; x0i += 1; }
+            if (x1 >= 1.0) { x1 -= 1.0; x1i += 1; }
+            if (x2 >= 1.0) { x2 -= 1.0; x2i += 1; }
         }
+        y0 += y_step0;
+        y1 += y_step1;
+        y2 += y_step2;
+        if (y0 >= 1.0) { y0 -= 1.0; y0i += stride0; }
+        if (y1 >= 1.0) { y1 -= 1.0; y1i += stride1; }
+        if (y2 >= 1.0) { y2 -= 1.0; y2i += stride2; }
     }
     return result;
 }
