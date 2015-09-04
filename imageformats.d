@@ -1581,7 +1581,7 @@ struct JPEG_Decoder {
     struct Component {
         ubyte id;
         ubyte sfx, sfy;   // sampling factors, aka. h and v
-        long x, y;       // total num of samples, without fill samples
+        size_t x, y;       // total num of samples, without fill samples
         ubyte qtable;
         ubyte ac_table;
         ubyte dc_table;
@@ -1832,16 +1832,16 @@ void read_frame_header(ref JPEG_Decoder dc) {
         throw new ImageIOException("invalid / not supported");
 
     foreach (i; 0..dc.num_comps) {
-        dc.comps[i].x = cast(long) ceil(dc.width * (cast(double) dc.comps[i].sfx / dc.hmax));
-        dc.comps[i].y = cast(long) ceil(dc.height * (cast(double) dc.comps[i].sfy / dc.vmax));
+        dc.comps[i].x = cast(size_t) ceil(dc.width * (cast(double) dc.comps[i].sfx / dc.hmax));
+        dc.comps[i].y = cast(size_t) ceil(dc.height * (cast(double) dc.comps[i].sfy / dc.vmax));
 
         debug(DebugJPEG) writefln("%d comp %d sfx/sfy: %d/%d", i, dc.comps[i].id,
                                                                   dc.comps[i].sfx,
                                                                   dc.comps[i].sfy);
     }
 
-    long mcu_w = dc.hmax * 8;
-    long mcu_h = dc.vmax * 8;
+    size_t mcu_w = dc.hmax * 8;
+    size_t mcu_h = dc.vmax * 8;
     dc.num_mcu_x = cast(int) ((dc.width + mcu_w-1) / mcu_w);
     dc.num_mcu_y = cast(int) ((dc.height + mcu_h-1) / mcu_h);
 
