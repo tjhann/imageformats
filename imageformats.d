@@ -1222,6 +1222,7 @@ public struct BMP_Header {
     ptrdiff_t width;
     ptrdiff_t height;
     ushort planes;
+    size_t bits_pp;
     uint dib_version;
     DibV1 dib_v1;
     DibV2 dib_v2;
@@ -1232,7 +1233,6 @@ public struct BMP_Header {
 
 /// Part of BMP header, not always present.
 public struct DibV1 {
-    size_t bits_pp;
     uint compression;
     size_t idat_size;
     size_t pixels_per_meter_x;
@@ -1292,7 +1292,6 @@ BMP_Header read_bmp_header(Reader stream) {
 
     if (1 <= dib_version) {
         DibV1 v1 = {
-            bits_pp               : cast(size_t) littleEndianToNative!ushort(dib_header[10..12]),
             compression           : littleEndianToNative!uint(dib_header[12..16]),
             idat_size             : cast(size_t) littleEndianToNative!uint(dib_header[16..20]),
             pixels_per_meter_x    : cast(size_t) littleEndianToNative!uint(dib_header[20..24]),
@@ -1335,12 +1334,26 @@ BMP_Header read_bmp_header(Reader stream) {
         dib_v5 = v5;
     }
 
+    ptrdiff_t width, height; ushort planes; size_t bits_pp;
+    if (0 == dib_version) {
+        width = littleEndianToNative!ushort(dib_header[0..2]);
+        height = littleEndianToNative!ushort(dib_header[2..4]);
+        planes = littleEndianToNative!ushort(dib_header[4..6]);
+        bits_pp = cast(size_t) littleEndianToNative!ushort(dib_header[6..8]);
+    } else {
+        width = littleEndianToNative!int(dib_header[0..4]);
+        height = littleEndianToNative!int(dib_header[4..8]);
+        planes = littleEndianToNative!ushort(dib_header[8..10]);
+        bits_pp = cast(size_t) littleEndianToNative!ushort(dib_header[10..12]);
+    }
+
     BMP_Header header = {
         file_size             : cast(size_t) littleEndianToNative!uint(tmp[2..6]),
         pixel_data_offset     : cast(size_t) littleEndianToNative!uint(tmp[10..14]),
-        width                 : littleEndianToNative!int(dib_header[0..4]),
-        height                : littleEndianToNative!int(dib_header[4..8]),
-        planes                : littleEndianToNative!ushort(dib_header[8..10]),
+        width                 : width,
+        height                : height,
+        planes                : planes,
+        bits_pp               : bits_pp,
         dib_version           : dib_version,
         dib_v1                : dib_v1,
         dib_v2                : dib_v2,
@@ -1376,13 +1389,13 @@ IFImage read_bmp(Reader stream, long req_chans = 0) {
     if (1 <= hdr.dib_version) {
         if (256 < hdr.dib_v1.palette_length)
             throw new ImageIOException("ivnalid palette length");
-        if (hdr.dib_v1.bits_pp <= 8 &&
+        if (hdr.bits_pp <= 8 &&
            (hdr.dib_v1.palette_length == 0 || hdr.dib_v1.compression != CMP_RGB))
              throw new ImageIOException("invalid format");
         if (hdr.dib_v1.compression != CMP_RGB && hdr.dib_v1.compression != CMP_BITS)
              throw new ImageIOException("unsupported compression");
 
-        switch (hdr.dib_v1.bits_pp) {
+        switch (hdr.bits_pp) {
             case 8  : bytes_pp = 1; paletted = true; break;
             case 24 : bytes_pp = 3; paletted = false; break;
             case 32 : bytes_pp = 4; paletted = false; break;
