@@ -42,6 +42,7 @@ void write_image(in char[] file, long w, long h, in ubyte[] data, long req_chans
     switch (ext) {
         case "png": write_image = &write_png; break;
         case "tga": write_image = &write_tga; break;
+        case "bmp": write_image = &write_bmp; break;
         default: throw new ImageIOException("unknown image extension/type");
     }
     scope writer = new FileWriter(file);
@@ -1516,6 +1517,69 @@ void read_bmp_info(Reader stream, out long w, out long h, out long chans) {
     h = abs(hdr.height);
     chans = (hdr.dib_version >= 3 && hdr.dib_v3_alpha_mask != 0) ? ColFmt.RGBA
                                                                  : ColFmt.RGB;
+}
+
+// ----------------------------------------------------------------------
+// BMP encoder
+
+///
+public void write_bmp(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
+{
+    scope writer = new FileWriter(file);
+    write_bmp(writer, w, h, data, tgt_chans);
+}
+
+///
+public ubyte[] write_bmp_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
+    scope writer = new MemWriter();
+    write_bmp(writer, w, h, data, tgt_chans);
+    return writer.result;
+}
+
+// Always writes RGB data.
+void write_bmp(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 0) {
+    if (w < 1 || h < 1 || 0x7fff < w || 0x7fff < h)
+        throw new ImageIOException("invalid dimensions");
+    size_t src_chans = data.length / cast(size_t) w / cast(size_t) h;
+    if (src_chans < 1 || 4 < src_chans || (tgt_chans != 0 && tgt_chans != 3))
+        throw new ImageIOException("invalid channel count");
+    if (src_chans * w * h != data.length)
+        throw new ImageIOException("mismatching dimensions and length");
+
+    const size_t tgt_linesize = cast(size_t) w * 3;
+    const size_t pad = 3 - ((tgt_linesize-1) & 3);
+    const size_t idat_offset = 14 + 40;       // bmp file header + dib header
+    const size_t filesize = idat_offset + cast(size_t) h * (tgt_linesize + pad);
+    if (filesize > 0xffff_ffff) {
+        throw new ImageIOException("image too large");
+    }
+
+    ubyte[14+40] hdr;
+    hdr[0..2] = [0x42, 0x4d];
+    hdr[2..6] = nativeToLittleEndian(cast(uint) filesize);
+    hdr[6..10] = 0;                                                // reserved
+    hdr[10..14] = nativeToLittleEndian(cast(uint) idat_offset);     // offset of pixel data
+    hdr[14..18] = nativeToLittleEndian(cast(uint) 40);              // dib header size
+    hdr[18..22] = nativeToLittleEndian(cast(int) w);
+    hdr[22..26] = nativeToLittleEndian(cast(int) h);            // positive -> bottom-up
+    hdr[26..28] = nativeToLittleEndian(cast(ushort) 1);         // planes
+    hdr[28..30] = nativeToLittleEndian(cast(ushort) 24);         // bits per pixel
+    hdr[30..30+6*4] = 0;                                          // dib v1
+    stream.rawWrite(hdr);
+
+    const LineConv convert = get_converter(src_chans, _ColFmt.BGR);
+
+    auto tgt_line = new ubyte[tgt_linesize + pad];
+    const size_t src_linesize = cast(size_t) w * src_chans;
+    size_t si = cast(size_t) h * src_linesize;
+
+    foreach (_; 0..h) {
+        si -= src_linesize;
+        convert(data[si .. si + src_linesize], tgt_line[0..tgt_linesize]);
+        stream.rawWrite(tgt_line);
+    }
+
+    stream.flush();
 }
 
 // --------------------------------------------------------------------------------
