@@ -2923,3 +2923,38 @@ const(char)[] extract_extension_lowercase(in char[] filename) {
     ptrdiff_t di = filename.lastIndexOf('.');
     return (0 < di && di+1 < filename.length) ? filename[di+1..$].toLower() : "";
 }
+
+unittest {
+    // The TGA and BMP files are not as varied in format as the PNG files, so
+    // not as well tested.
+    string png_path = "tests/pngsuite/";
+    string tga_path = "tests/pngsuite-tga/";
+    string bmp_path = "tests/pngsuite-bmp/";
+
+    auto files = [
+        "basi0g08",    // PNG image data, 32 x 32, 8-bit grayscale, interlaced
+        "basi2c08",    // PNG image data, 32 x 32, 8-bit/color RGB, interlaced
+        "basi3p08",    // PNG image data, 32 x 32, 8-bit colormap, interlaced
+        "basi4a08",    // PNG image data, 32 x 32, 8-bit gray+alpha, interlaced
+        "basi6a08",    // PNG image data, 32 x 32, 8-bit/color RGBA, interlaced
+        "basn0g08",    // PNG image data, 32 x 32, 8-bit grayscale, non-interlaced
+        "basn2c08",    // PNG image data, 32 x 32, 8-bit/color RGB, non-interlaced
+        "basn3p08",    // PNG image data, 32 x 32, 8-bit colormap, non-interlaced
+        "basn4a08",    // PNG image data, 32 x 32, 8-bit gray+alpha, non-interlaced
+        "basn6a08",    // PNG image data, 32 x 32, 8-bit/color RGBA, non-interlaced
+    ];
+
+    foreach (file; files) {
+        //writefln("%s", file);
+        auto a = read_image(png_path ~ file ~ ".png", ColFmt.RGBA);
+        auto b = read_image(tga_path ~ file ~ ".tga", ColFmt.RGBA);
+        auto c = read_image(bmp_path ~ file ~ ".bmp", ColFmt.RGBA);
+        assert(a.w == b.w && a.w == c.w);
+        assert(a.h == b.h && a.h == c.h);
+        assert(a.pixels.length == b.pixels.length && a.pixels.length == c.pixels.length);
+        foreach (i; 0 .. a.pixels.length) {
+            assert(a.pixels[i] == b.pixels[i], "png/tga");
+            assert(a.pixels[i] == c.pixels[i], "png/bmp");
+        }
+    }
+}
