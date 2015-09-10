@@ -678,12 +678,11 @@ void write_png(ref PNG_Encoder ec) {
 }
 
 void write_IDATs(ref PNG_Encoder ec) {
-    static immutable ubyte[4] IDAT_type = ['I','D','A','T'];
     immutable long max_idatlen = 4 * 4096;
     ec.writelen = 0;
     ec.chunk_buf = new ubyte[8 + max_idatlen + 4];
     ec.data_buf = ec.chunk_buf[8 .. 8 + max_idatlen];
-    ec.chunk_buf[4 .. 8] = IDAT_type;
+    ec.chunk_buf[4 .. 8] = ['I','D','A','T'];
 
     immutable size_t linesize = ec.w * ec.tgt_chans + 1; // +1 for filter type
     ubyte[] cline = new ubyte[linesize];
