@@ -1391,7 +1391,7 @@ IFImage read_bmp(Reader stream, long req_chans = 0) {
             throw new ImageIOException("ivnalid palette length");
         if (hdr.bits_pp <= 8 &&
            (hdr.dib_v1.palette_length == 0 || hdr.dib_v1.compression != CMP_RGB))
-             throw new ImageIOException("invalid format");
+             throw new ImageIOException("unsupported format");
         if (hdr.dib_v1.compression != CMP_RGB && hdr.dib_v1.compression != CMP_BITS)
              throw new ImageIOException("unsupported compression");
 
@@ -1430,7 +1430,7 @@ IFImage read_bmp(Reader stream, long req_chans = 0) {
 
     bool alpha_masked = false;
     size_t alphai = 0;
-    if (3 <= hdr.dib_version && hdr.dib_v3_alpha_mask != 0) {
+    if (bytes_pp == 4 && 3 <= hdr.dib_version && hdr.dib_v3_alpha_mask != 0) {
         alpha_masked = true;
         alphai = mask_to_idx(hdr.dib_v3_alpha_mask);
     }
