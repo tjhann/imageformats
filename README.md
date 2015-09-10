@@ -1,4 +1,6 @@
-**Image loading and saving** [![Build Status](https://travis-ci.org/lgvz/imageformats.svg)](https://travis-ci.org/lgvz/imageformats)
+[![Build Status](https://travis-ci.org/lgvz/imageformats.svg)](https://travis-ci.org/lgvz/imageformats)
+
+**Image loading and saving**
 - returned image data is always 8-bit (Y/YA/RGB/RGBA)
 
 | Format | Decoder            | Encoder                           |
