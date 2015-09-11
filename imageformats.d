@@ -1514,8 +1514,9 @@ void read_bmp_info(Reader stream, out long w, out long h, out long chans) {
     BMP_Header hdr = read_bmp_header(stream);
     w = abs(hdr.width);
     h = abs(hdr.height);
-    chans = (hdr.dib_version >= 3 && hdr.dib_v3_alpha_mask != 0) ? ColFmt.RGBA
-                                                                 : ColFmt.RGB;
+    chans = (hdr.dib_version >= 3 && hdr.dib_v3_alpha_mask != 0 && hdr.bits_pp == 32)
+          ? ColFmt.RGBA
+          : ColFmt.RGB;
 }
 
 // ----------------------------------------------------------------------
