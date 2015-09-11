@@ -1536,38 +1536,56 @@ public ubyte[] write_bmp_to_mem(long w, long h, in ubyte[] data, long tgt_chans 
     return writer.result;
 }
 
-// Always writes RGB data.
+// Writes RGB or RGBA data.
 void write_bmp(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 0) {
     if (w < 1 || h < 1 || 0x7fff < w || 0x7fff < h)
         throw new ImageIOException("invalid dimensions");
     size_t src_chans = data.length / cast(size_t) w / cast(size_t) h;
-    if (src_chans < 1 || 4 < src_chans || (tgt_chans != 0 && tgt_chans != 3))
+    if (src_chans < 1 || 4 < src_chans)
         throw new ImageIOException("invalid channel count");
+    if (tgt_chans != 0 && tgt_chans != 3 && tgt_chans != 4)
+        throw new ImageIOException("unsupported format for writing");
     if (src_chans * w * h != data.length)
         throw new ImageIOException("mismatching dimensions and length");
 
-    const size_t tgt_linesize = cast(size_t) w * 3;
+    if (tgt_chans == 0)
+        tgt_chans = (src_chans == 1 || src_chans == 3) ? 3 : 4;
+
+    const dib_size = 108;
+    const size_t tgt_linesize = cast(size_t) (w * tgt_chans);
     const size_t pad = 3 - ((tgt_linesize-1) & 3);
-    const size_t idat_offset = 14 + 40;       // bmp file header + dib header
+    const size_t idat_offset = 14 + dib_size;       // bmp file header + dib header
     const size_t filesize = idat_offset + cast(size_t) h * (tgt_linesize + pad);
     if (filesize > 0xffff_ffff) {
         throw new ImageIOException("image too large");
     }
 
-    ubyte[14+40] hdr;
+    ubyte[14+dib_size] hdr;
     hdr[0..2] = [0x42, 0x4d];
     hdr[2..6] = nativeToLittleEndian(cast(uint) filesize);
     hdr[6..10] = 0;                                                // reserved
-    hdr[10..14] = nativeToLittleEndian(cast(uint) idat_offset);     // offset of pixel data
-    hdr[14..18] = nativeToLittleEndian(cast(uint) 40);              // dib header size
+    hdr[10..14] = nativeToLittleEndian(cast(uint) idat_offset);    // offset of pixel data
+    hdr[14..18] = nativeToLittleEndian(cast(uint) dib_size);       // dib header size
     hdr[18..22] = nativeToLittleEndian(cast(int) w);
     hdr[22..26] = nativeToLittleEndian(cast(int) h);            // positive -> bottom-up
     hdr[26..28] = nativeToLittleEndian(cast(ushort) 1);         // planes
-    hdr[28..30] = nativeToLittleEndian(cast(ushort) 24);         // bits per pixel
-    hdr[30..30+6*4] = 0;                                          // dib v1
+    hdr[28..30] = nativeToLittleEndian(cast(ushort) (tgt_chans * 8)); // bits per pixel
+    hdr[30..34] = nativeToLittleEndian((tgt_chans == 3) ? CMP_RGB : CMP_BITS);
+    hdr[34..54] = 0;                                          // rest of dib v1
+    if (tgt_chans == 3) {
+        hdr[54..70] = 0;    // dib v2 and v3
+    } else {
+        hdr[54..58] = [0, 0, 0xff, 0];
+        hdr[58..62] = [0, 0xff, 0, 0];
+        hdr[62..66] = [0xff, 0, 0, 0];
+        hdr[66..70] = [0, 0, 0, 0xff];
+    }
+    hdr[70..74] = ['B', 'G', 'R', 's'];
+    hdr[74..122] = 0;
     stream.rawWrite(hdr);
 
-    const LineConv convert = get_converter(src_chans, _ColFmt.BGR);
+    const LineConv convert = get_converter(src_chans, (tgt_chans == 3) ? _ColFmt.BGR
+                                                                       : _ColFmt.BGRA);
 
     auto tgt_line = new ubyte[tgt_linesize + pad];
     const size_t src_linesize = cast(size_t) w * src_chans;
