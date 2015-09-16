@@ -1663,7 +1663,6 @@ struct JPEG_Decoder {
     bool correct_comp_ids;
     Component[3] comps;
     ubyte num_comps;
-    int[3] index_for;   // index_for[0] is index of comp that comes first in stream
     int tgt_chans;
 
     size_t width, height;
@@ -1674,7 +1673,6 @@ struct JPEG_Decoder {
 
     // image component
     struct Component {
-        ubyte id;
         ubyte sfx, sfy;   // sampling factors, aka. h and v
         size_t x, y;       // total num of samples, without fill samples
         ubyte qtable;
@@ -1904,11 +1902,8 @@ void read_frame_header(ref JPEG_Decoder dc) {
         if ((dc.correct_comp_ids && ci != i+1)
         || (!dc.correct_comp_ids && ci != i))
             throw new ImageIOException("invalid component id");
-        if (dc.correct_comp_ids) { ci -= 1; }
 
-        dc.index_for[i] = ci;
-        auto comp = &dc.comps[ci];
-        comp.id = ci;
+        auto comp = &dc.comps[i];
         ubyte sampling_factors = tmp[i*3 + 1];
         comp.sfx = sampling_factors >> 4;
         comp.sfy = sampling_factors & 0xf;
@@ -1966,10 +1961,8 @@ void read_scan_header(ref JPEG_Decoder dc) {
     dc.stream.readExact(buf, buf.length);
 
     foreach (i; 0..num_scan_comps) {
-        uint comp_id = buf[i*2] - ((dc.correct_comp_ids) ? 1 : 0);
-        int ci;    // component index
-        while (ci < dc.num_comps && dc.comps[ci].id != comp_id) ++ci;
-        if (dc.num_comps <= ci)
+        uint ci = buf[i*2] - ((dc.correct_comp_ids) ? 1 : 0);
+        if (ci >= dc.num_comps)
             throw new ImageIOException("invalid component id");
 
         ubyte tables = buf[i*2+1];
@@ -2030,8 +2023,8 @@ void decode_scan(ref JPEG_Decoder dc) {
         foreach (mcu_i; 0 .. dc.num_mcu_x) {
 
             // decode mcu
-            foreach (_c; 0..dc.num_comps) {
-                auto comp = &dc.comps[dc.index_for[_c]];
+            foreach (c; 0..dc.num_comps) {
+                auto comp = &dc.comps[c];
                 foreach (du_j; 0 .. comp.sfy) {
                     foreach (du_i; 0 .. comp.sfx) {
                         // decode entropy, dequantize & dezigzag
