@@ -14,6 +14,13 @@ struct IFImage {
     ubyte[]     pixels;
 }
 
+/// Image
+struct IFImage16 {
+    long        w, h;
+    ColFmt      c;
+    ushort[]    pixels;
+}
+
 /// Color format
 enum ColFmt {
     Y = 1,
@@ -201,7 +208,41 @@ public IFImage read_png_from_mem(in ubyte[] source, long req_chans = 0) {
     return read_png(reader, req_chans);
 }
 
+///
+public IFImage16 read_png16(in char[] filename, long req_chans = 0) {
+    scope reader = new FileReader(filename);
+    return read_png16(reader, req_chans);
+}
+
+///
+public IFImage16 read_png16_from_mem(in ubyte[] source, long req_chans = 0) {
+    scope reader = new MemReader(source);
+    return read_png16(reader, req_chans);
+}
+
 IFImage read_png(Reader stream, long req_chans = 0) {
+    PNG_Decoder dc = init_png_decoder(stream, req_chans, 8);
+    IFImage result = {
+        w      : dc.w,
+        h      : dc.h,
+        c      : cast(ColFmt) dc.tgt_chans,
+        pixels : decode_png(dc).bpc8
+    };
+    return result;
+}
+
+IFImage16 read_png16(Reader stream, long req_chans = 0) {
+    PNG_Decoder dc = init_png_decoder(stream, req_chans, 16);
+    IFImage16 result = {
+        w      : dc.w,
+        h      : dc.h,
+        c      : cast(ColFmt) dc.tgt_chans,
+        pixels : decode_png(dc).bpc16
+    };
+    return result;
+}
+
+PNG_Decoder init_png_decoder(Reader stream, long req_chans, int req_bpc) {
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
 
@@ -209,8 +250,8 @@ IFImage read_png(Reader stream, long req_chans = 0) {
 
     if (hdr.width < 1 || hdr.height < 1 || int.max < cast(ulong) hdr.width * hdr.height)
         throw new ImageIOException("invalid dimensions");
-    if (hdr.bit_depth != 8)
-        throw new ImageIOException("only 8-bit images supported");
+    if ((hdr.bit_depth != 8 && hdr.bit_depth != 16) || (req_bpc != 8 && req_bpc != 16))
+        throw new ImageIOException("only 8-bit and 16-bit images supported");
     if (! (hdr.color_type == PNG_ColorType.Y    ||
            hdr.color_type == PNG_ColorType.RGB  ||
            hdr.color_type == PNG_ColorType.Idx  ||
@@ -225,19 +266,14 @@ IFImage read_png(Reader stream, long req_chans = 0) {
         stream      : stream,
         src_indexed : (hdr.color_type == PNG_ColorType.Idx),
         src_chans   : channels(cast(PNG_ColorType) hdr.color_type),
+        bpc         : hdr.bit_depth,
+        req_bpc     : req_bpc,
         ilace       : hdr.interlace_method,
         w           : hdr.width,
         h           : hdr.height,
     };
     dc.tgt_chans = (req_chans == 0) ? dc.src_chans : cast(int) req_chans;
-
-    IFImage result = {
-        w      : dc.w,
-        h      : dc.h,
-        c      : cast(ColFmt) dc.tgt_chans,
-        pixels : decode_png(dc)
-    };
-    return result;
+    return dc;
 }
 
 ///
@@ -281,6 +317,8 @@ struct PNG_Decoder {
     bool src_indexed;
     int src_chans;
     int tgt_chans;
+    int bpc;
+    int req_bpc;
     size_t w, h;
     ubyte ilace;
 
@@ -292,7 +330,7 @@ struct PNG_Decoder {
     ubyte[] palette;
 }
 
-ubyte[] decode_png(ref PNG_Decoder dc) {
+Buffer decode_png(ref PNG_Decoder dc) {
     dc.uc = new UnCompress(HeaderFormat.deflate);
     dc.read_buf = new ubyte[4096];
 
@@ -303,7 +341,7 @@ ubyte[] decode_png(ref PNG_Decoder dc) {
         IEND_parsed,
     }
 
-    ubyte[] result;
+    Buffer result;
     auto stage = Stage.IHDR_parsed;
     dc.stream.readExact(dc.chunkmeta[4..$], 8);  // next chunk's len and type
 
@@ -387,35 +425,60 @@ enum InterlaceMethod {
     None = 0, Adam7 = 1
 }
 
-ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
+union Buffer {
+    ubyte[] bpc8;
+    ushort[] bpc16;
+}
+
+Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
+    assert(dc.req_bpc == 8 || dc.req_bpc == 16);
+
     bool metaready = false;     // chunk len, type, crc
 
-    immutable size_t filter_step = dc.src_indexed ? 1 : dc.src_chans;
+    immutable size_t filter_step = dc.src_indexed ? 1 : dc.src_chans * ((dc.bpc == 8) ? 1 : 2);
     immutable size_t tgt_linesize = (dc.w * dc.tgt_chans);
 
     ubyte[] depaletted = dc.src_indexed ? new ubyte[dc.w * 3] : null;
-    ubyte[] result = new ubyte[dc.w * dc.h * dc.tgt_chans];
 
-    const LineConv convert = get_converter(dc.src_chans, dc.tgt_chans);
+    ubyte[]  result8  = (dc.req_bpc == 8)  ? new ubyte[dc.w * dc.h * dc.tgt_chans] : null;
+    ushort[] result16 = (dc.req_bpc == 16) ? new ushort[dc.w * dc.h * dc.tgt_chans] : null;
+
+    const LineConv!ubyte convert    = get_converter!ubyte(dc.src_chans, dc.tgt_chans);
+    const LineConv!ushort convert16 = get_converter!ushort(dc.src_chans, dc.tgt_chans);
 
     if (dc.ilace == InterlaceMethod.None) {
         immutable size_t src_sl_size = dc.w * filter_step;
+        immutable size_t src_samples = dc.w * dc.src_chans;
         auto cline = new ubyte[src_sl_size+1];   // current line + filter byte
         auto pline = new ubyte[src_sl_size+1];   // previous line, inited to 0
+        auto cline8 = (dc.req_bpc == 8 && dc.bpc != 8) ? new ubyte[src_samples] : null;
+        auto cline16 = (dc.req_bpc == 16) ? new ushort[src_samples] : null;
 
-        size_t tgt_si = 0;    // scanline index in target buffer
+        size_t tgt_si = 0;    // scanline index (in bytes) in target buffer
         foreach (j; 0 .. dc.h) {
             uncompress_line(dc, len, metaready, cline);
             ubyte filter_type = cline[0];
 
             recon(cline[1..$], pline[1..$], filter_type, filter_step);
 
+            ubyte[] bytes;  // defiltered bytes or 8-bit samples from palette
             if (dc.src_indexed) {
                 depalette(dc.palette, cline[1..$], depaletted);
-                convert(depaletted, result[tgt_si .. tgt_si + tgt_linesize]);
+                bytes = depaletted[0 .. src_samples];
             } else {
-                convert(cline[1 .. $], result[tgt_si .. tgt_si + tgt_linesize]);
+                bytes = cline[1..$];
             }
+
+            // convert bytes to either 8-bit or 16-bit samples
+            samples_from_bytes(bytes, dc.bpc, dc.req_bpc, cline8, cline16);
+
+            // convert colors
+            if (dc.req_bpc == 8) {
+                convert(cline8[0 .. src_samples], result8[tgt_si .. tgt_si + tgt_linesize]);
+            } else {
+                convert16(cline16[0 .. src_samples], result16[tgt_si .. tgt_si + tgt_linesize]);
+            }
+
             tgt_si += tgt_linesize;
 
             ubyte[] _swap = pline;
@@ -447,13 +510,18 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
         const size_t max_scanline_size = dc.w * filter_step;
         const linebuf0 = new ubyte[max_scanline_size+1]; // +1 for filter type byte
         const linebuf1 = new ubyte[max_scanline_size+1]; // +1 for filter type byte
-        auto redlinebuf = new ubyte[dc.w * dc.tgt_chans];
+        auto redline8 = (dc.req_bpc == 8) ? new ubyte[dc.w * dc.tgt_chans] : null;
+        auto redline16 = (dc.req_bpc == 16) ? new ushort[dc.w * dc.tgt_chans] : null;
+        auto cline8 = (dc.req_bpc == 8 && dc.bpc != 8) ? new ubyte[dc.w * dc.src_chans] : null;
+        auto cline16 = (dc.req_bpc == 16) ? new ushort[dc.w * dc.src_chans] : null;
 
         foreach (pass; 0 .. 7) {
             const A7_Catapult tgt_px = a7_catapults[pass];   // target pixel
             const size_t src_linesize = redw[pass] * filter_step;
+            const size_t src_samples  = redw[pass] * dc.src_chans;
             auto cline = cast(ubyte[]) linebuf0[0 .. src_linesize+1];
             auto pline = cast(ubyte[]) linebuf1[0 .. src_linesize+1];
+            pline[] = 0;
 
             foreach (j; 0 .. redh[pass]) {
                 uncompress_line(dc, len, metaready, cline);
@@ -461,18 +529,32 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
 
                 recon(cline[1..$], pline[1..$], filter_type, filter_step);
 
+                ubyte[] bytes;  // defiltered bytes or 8-bit samples from palette
                 if (dc.src_indexed) {
                     depalette(dc.palette, cline[1..$], depaletted);
-                    convert(depaletted[0 .. redw[pass]*3],
-                            redlinebuf[0 .. redw[pass]*dc.tgt_chans]);
+                    bytes = depaletted[0 .. src_samples];
                 } else {
-                    convert(cline[1 .. $], redlinebuf[0 .. redw[pass]*dc.tgt_chans]);
+                    bytes = cline[1..$];
                 }
 
-                for (size_t i, redi; i < redw[pass]; ++i, redi += dc.tgt_chans) {
-                    size_t tgt = tgt_px(i, j, dc.w) * dc.tgt_chans;
-                    result[tgt .. tgt + dc.tgt_chans] =
-                        redlinebuf[redi .. redi + dc.tgt_chans];
+                // convert bytes to either 8-bit or 16-bit samples
+                samples_from_bytes(bytes, dc.bpc, dc.req_bpc, cline8, cline16);
+
+                // convert colors and sling pixels from reduced image to final buffer
+                if (dc.req_bpc == 8) {
+                    convert(cline8[0 .. src_samples], redline8[0 .. redw[pass]*dc.tgt_chans]);
+                    for (size_t i, redi; i < redw[pass]; ++i, redi += dc.tgt_chans) {
+                        size_t tgt = tgt_px(i, j, dc.w) * dc.tgt_chans;
+                        result8[tgt .. tgt + dc.tgt_chans] =
+                            redline8[redi .. redi + dc.tgt_chans];
+                    }
+                } else {
+                    convert16(cline16[0 .. src_samples], redline16[0 .. redw[pass]*dc.tgt_chans]);
+                    for (size_t i, redi; i < redw[pass]; ++i, redi += dc.tgt_chans) {
+                        size_t tgt = tgt_px(i, j, dc.w) * dc.tgt_chans;
+                        result16[tgt .. tgt + dc.tgt_chans] =
+                            redline16[redi .. redi + dc.tgt_chans];
+                    }
                 }
 
                 ubyte[] _swap = pline;
@@ -489,7 +571,31 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
         if (crc != dc.chunkmeta[0..4])
             throw new ImageIOException("corrupt chunk");
     }
-    return result;
+
+    Buffer result;
+    switch (dc.req_bpc) {
+        case 8: result.bpc8 = result8; return result;
+        case 16: result.bpc16 = result16; return result;
+        default: throw new ImageIOException("internal error");
+    }
+}
+
+void samples_from_bytes(ubyte[] bytes, int bpc, int req_bpc, ref ubyte[] cline8,
+                                                                ushort[] cline16)
+{
+    if (req_bpc == 8) {
+        switch (bpc) {
+            case 8: cline8 = bytes; break;
+            case 16: line8_from_bpc16(bytes, cline8); break;
+            default: throw new ImageIOException("unsupported bit depth (and bug)");
+        }
+    } else {
+        switch (bpc) {
+            case 8: line16_from_bpc8(bytes, cline16); break;
+            case 16: line16_from_bpc16(bytes, cline16); break;
+            default: throw new ImageIOException("unsupported bit depth (and bug)");
+        }
+    }
 }
 
 void depalette(in ubyte[] palette, in ubyte[] src_line, ubyte[] depaletted) pure {
@@ -696,7 +802,7 @@ void write_IDATs(ref PNG_Encoder ec) {
     ubyte[] filtered_line = new ubyte[linesize];
     ubyte[] filtered_image;
 
-    const LineConv convert = get_converter(ec.src_chans, ec.tgt_chans);
+    const LineConv!ubyte convert = get_converter!ubyte(ec.src_chans, ec.tgt_chans);
 
     immutable size_t filter_step = ec.tgt_chans;   // step between pixels, in bytes
     immutable size_t src_linesize = ec.w * ec.src_chans;
@@ -964,7 +1070,7 @@ ubyte[] decode_tga(ref TGA_Decoder dc) {
     immutable ptrdiff_t tgt_stride = (dc.origin_at_top) ? tgt_linesize : -tgt_linesize;
     ptrdiff_t ti                   = (dc.origin_at_top) ? 0 : (dc.h-1) * tgt_linesize;
 
-    const LineConv convert = get_converter(dc.src_fmt, dc.tgt_chans);
+    const LineConv!ubyte convert = get_converter!ubyte(dc.src_fmt, dc.tgt_chans);
 
     if (!dc.rle) {
         foreach (_j; 0 .. dc.h) {
@@ -1068,7 +1174,7 @@ void write_image_data(ref TGA_Encoder ec) {
         default: throw new ImageIOException("internal error");
     }
 
-    const LineConv convert = get_converter(ec.src_chans, tgt_fmt);
+    const LineConv!ubyte convert = get_converter!ubyte(ec.src_chans, tgt_fmt);
 
     immutable size_t src_linesize = ec.w * ec.src_chans;
     immutable size_t tgt_linesize = ec.w * ec.tgt_chans;
@@ -1454,7 +1560,7 @@ IFImage read_bmp(Reader stream, long req_chans = 0) {
                                                            : _ColFmt.RGB;
 
     const src_fmt = (!paletted || pe_bytes_pp == 4) ? _ColFmt.BGRA : _ColFmt.BGR;
-    const LineConv convert = get_converter(src_fmt, tgt_chans);
+    const LineConv!ubyte convert = get_converter!ubyte(src_fmt, tgt_chans);
 
     immutable size_t src_linesize = hdr.width * bytes_pp;  // without padding
     immutable size_t src_pad = 3 - ((src_linesize-1) % 4);
@@ -1588,8 +1694,9 @@ void write_bmp(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 
     hdr[74..122] = 0;
     stream.rawWrite(hdr);
 
-    const LineConv convert = get_converter(src_chans, (tgt_chans == 3) ? _ColFmt.BGR
-                                                                       : _ColFmt.BGRA);
+    const LineConv!ubyte convert =
+        get_converter!ubyte(src_chans, (tgt_chans == 3) ? _ColFmt.BGR
+                                                        : _ColFmt.BGRA);
 
     auto tgt_line = new ubyte[tgt_linesize + pad];
     const size_t src_linesize = cast(size_t) w * src_chans;
@@ -2650,145 +2757,163 @@ enum _ColFmt : int {
     BGRA,
 }
 
-alias LineConv = void function(in ubyte[] src, ubyte[] tgt);
+alias LineConv(T) = void function(in T[] src, T[] tgt);
 
-LineConv get_converter(long src_chans, long tgt_chans) pure {
+LineConv!T get_converter(T)(long src_chans, long tgt_chans) pure {
     long combo(long a, long b) pure nothrow { return a*16 + b; }
 
     if (src_chans == tgt_chans)
-        return &copy_line;
+        return &copy_line!T;
 
     switch (combo(src_chans, tgt_chans)) with (_ColFmt) {
-        case combo(Y, YA)      : return &Y_to_YA;
-        case combo(Y, RGB)     : return &Y_to_RGB;
-        case combo(Y, RGBA)    : return &Y_to_RGBA;
-        case combo(Y, BGR)     : return &Y_to_BGR;
-        case combo(Y, BGRA)    : return &Y_to_BGRA;
-        case combo(YA, Y)      : return &YA_to_Y;
-        case combo(YA, RGB)    : return &YA_to_RGB;
-        case combo(YA, RGBA)   : return &YA_to_RGBA;
-        case combo(YA, BGR)    : return &YA_to_BGR;
-        case combo(YA, BGRA)   : return &YA_to_BGRA;
-        case combo(RGB, Y)     : return &RGB_to_Y;
-        case combo(RGB, YA)    : return &RGB_to_YA;
-        case combo(RGB, RGBA)  : return &RGB_to_RGBA;
-        case combo(RGB, BGR)   : return &RGB_to_BGR;
-        case combo(RGB, BGRA)  : return &RGB_to_BGRA;
-        case combo(RGBA, Y)    : return &RGBA_to_Y;
-        case combo(RGBA, YA)   : return &RGBA_to_YA;
-        case combo(RGBA, RGB)  : return &RGBA_to_RGB;
-        case combo(RGBA, BGR)  : return &RGBA_to_BGR;
-        case combo(RGBA, BGRA) : return &RGBA_to_BGRA;
-        case combo(BGR, Y)     : return &BGR_to_Y;
-        case combo(BGR, YA)    : return &BGR_to_YA;
-        case combo(BGR, RGB)   : return &BGR_to_RGB;
-        case combo(BGR, RGBA)  : return &BGR_to_RGBA;
-        case combo(BGRA, Y)    : return &BGRA_to_Y;
-        case combo(BGRA, YA)   : return &BGRA_to_YA;
-        case combo(BGRA, RGB)  : return &BGRA_to_RGB;
-        case combo(BGRA, RGBA) : return &BGRA_to_RGBA;
+        case combo(Y, YA)      : return &Y_to_YA!T;
+        case combo(Y, RGB)     : return &Y_to_RGB!T;
+        case combo(Y, RGBA)    : return &Y_to_RGBA!T;
+        case combo(Y, BGR)     : return &Y_to_BGR!T;
+        case combo(Y, BGRA)    : return &Y_to_BGRA!T;
+        case combo(YA, Y)      : return &YA_to_Y!T;
+        case combo(YA, RGB)    : return &YA_to_RGB!T;
+        case combo(YA, RGBA)   : return &YA_to_RGBA!T;
+        case combo(YA, BGR)    : return &YA_to_BGR!T;
+        case combo(YA, BGRA)   : return &YA_to_BGRA!T;
+        case combo(RGB, Y)     : return &RGB_to_Y!T;
+        case combo(RGB, YA)    : return &RGB_to_YA!T;
+        case combo(RGB, RGBA)  : return &RGB_to_RGBA!T;
+        case combo(RGB, BGR)   : return &RGB_to_BGR!T;
+        case combo(RGB, BGRA)  : return &RGB_to_BGRA!T;
+        case combo(RGBA, Y)    : return &RGBA_to_Y!T;
+        case combo(RGBA, YA)   : return &RGBA_to_YA!T;
+        case combo(RGBA, RGB)  : return &RGBA_to_RGB!T;
+        case combo(RGBA, BGR)  : return &RGBA_to_BGR!T;
+        case combo(RGBA, BGRA) : return &RGBA_to_BGRA!T;
+        case combo(BGR, Y)     : return &BGR_to_Y!T;
+        case combo(BGR, YA)    : return &BGR_to_YA!T;
+        case combo(BGR, RGB)   : return &BGR_to_RGB!T;
+        case combo(BGR, RGBA)  : return &BGR_to_RGBA!T;
+        case combo(BGRA, Y)    : return &BGRA_to_Y!T;
+        case combo(BGRA, YA)   : return &BGRA_to_YA!T;
+        case combo(BGRA, RGB)  : return &BGRA_to_RGB!T;
+        case combo(BGRA, RGBA) : return &BGRA_to_RGBA!T;
         default                : throw new ImageIOException("internal error");
     }
 }
 
-void copy_line(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void copy_line(T)(in T[] src, T[] tgt) pure nothrow {
     tgt[0..$] = src[0..$];
 }
 
-ubyte luminance(ubyte r, ubyte g, ubyte b) pure nothrow {
-    return cast(ubyte) (0.21*r + 0.64*g + 0.15*b); // somewhat arbitrary weights
+T luminance(T)(T r, T g, T b) pure nothrow {
+    return cast(T) (0.21*r + 0.64*g + 0.15*b); // somewhat arbitrary weights
 }
 
-void Y_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void line16_from_bpc16(in ubyte[] src, ushort[] tgt) pure nothrow {
+    for (size_t k, t;   k < src.length;   k+=2, t+=1) {
+        tgt[t] = src[k] << 8 | src[k+1];
+    }
+}
+
+void line16_from_bpc8(in ubyte[] src, ushort[] tgt) pure nothrow {
+    for (size_t k;   k < src.length;   k+=1) {
+        tgt[k] = src[k] * 256 + 128;
+    }
+}
+
+void line8_from_bpc16(in ubyte[] src, ubyte[] tgt) pure nothrow {
+    for (size_t k, t;   k < src.length;   k+=2, t+=1) {
+        tgt[t] = src[k];    // truncate
+    }
+}
+
+void Y_to_YA(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=1, t+=2) {
         tgt[t] = src[k];
-        tgt[t+1] = 255;
+        tgt[t+1] = T.max;
     }
 }
 
 alias Y_to_BGR = Y_to_RGB;
-void Y_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void Y_to_RGB(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=1, t+=3)
         tgt[t .. t+3] = src[k];
 }
 
 alias Y_to_BGRA = Y_to_RGBA;
-void Y_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void Y_to_RGBA(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=1, t+=4) {
         tgt[t .. t+3] = src[k];
-        tgt[t+3] = 255;
+        tgt[t+3] = T.max;
     }
 }
 
-void YA_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void YA_to_Y(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=2, t+=1)
         tgt[t] = src[k];
 }
 
 alias YA_to_BGR = YA_to_RGB;
-void YA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void YA_to_RGB(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=2, t+=3)
         tgt[t .. t+3] = src[k];
 }
 
 alias YA_to_BGRA = YA_to_RGBA;
-void YA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void YA_to_RGBA(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=2, t+=4) {
         tgt[t .. t+3] = src[k];
         tgt[t+3] = src[k+1];
     }
 }
 
-void RGB_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void RGB_to_Y(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=3, t+=1)
         tgt[t] = luminance(src[k], src[k+1], src[k+2]);
 }
 
-void RGB_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void RGB_to_YA(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=3, t+=2) {
         tgt[t] = luminance(src[k], src[k+1], src[k+2]);
-        tgt[t+1] = 255;
+        tgt[t+1] = T.max;
     }
 }
 
-void RGB_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void RGB_to_RGBA(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=3, t+=4) {
         tgt[t .. t+3] = src[k .. k+3];
-        tgt[t+3] = 255;
+        tgt[t+3] = T.max;
     }
 }
 
-void RGBA_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void RGBA_to_Y(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=4, t+=1)
         tgt[t] = luminance(src[k], src[k+1], src[k+2]);
 }
 
-void RGBA_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void RGBA_to_YA(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=4, t+=2) {
         tgt[t] = luminance(src[k], src[k+1], src[k+2]);
         tgt[t+1] = src[k+3];
     }
 }
 
-void RGBA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void RGBA_to_RGB(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=4, t+=3)
         tgt[t .. t+3] = src[k .. k+3];
 }
 
-void BGR_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void BGR_to_Y(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=3, t+=1)
         tgt[t] = luminance(src[k+2], src[k+1], src[k+1]);
 }
 
-void BGR_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void BGR_to_YA(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=3, t+=2) {
         tgt[t] = luminance(src[k+2], src[k+1], src[k+1]);
-        tgt[t+1] = 255;
+        tgt[t+1] = T.max;
     }
 }
 
 alias RGB_to_BGR = BGR_to_RGB;
-void BGR_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void BGR_to_RGB(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k;   k < src.length;   k+=3) {
         tgt[k  ] = src[k+2];
         tgt[k+1] = src[k+1];
@@ -2797,29 +2922,29 @@ void BGR_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
 }
 
 alias RGB_to_BGRA = BGR_to_RGBA;
-void BGR_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void BGR_to_RGBA(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=3, t+=4) {
         tgt[t  ] = src[k+2];
         tgt[t+1] = src[k+1];
         tgt[t+2] = src[k  ];
-        tgt[t+3] = 255;
+        tgt[t+3] = T.max;
     }
 }
 
-void BGRA_to_Y(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void BGRA_to_Y(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=4, t+=1)
         tgt[t] = luminance(src[k+2], src[k+1], src[k]);
 }
 
-void BGRA_to_YA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void BGRA_to_YA(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=4, t+=2) {
         tgt[t] = luminance(src[k+2], src[k+1], src[k]);
-        tgt[t+1] = 255;
+        tgt[t+1] = T.max;
     }
 }
 
 alias RGBA_to_BGR = BGRA_to_RGB;
-void BGRA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void BGRA_to_RGB(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=4, t+=3) {
         tgt[t  ] = src[k+2];
         tgt[t+1] = src[k+1];
@@ -2828,7 +2953,7 @@ void BGRA_to_RGB(in ubyte[] src, ubyte[] tgt) pure nothrow {
 }
 
 alias RGBA_to_BGRA = BGRA_to_RGBA;
-void BGRA_to_RGBA(in ubyte[] src, ubyte[] tgt) pure nothrow {
+void BGRA_to_RGBA(T)(in T[] src, T[] tgt) pure nothrow {
     for (size_t k, t;   k < src.length;   k+=4, t+=4) {
         tgt[t  ] = src[k+2];
         tgt[t+1] = src[k+1];
