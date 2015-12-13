@@ -390,7 +390,7 @@ enum InterlaceMethod {
 ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
     bool metaready = false;     // chunk len, type, crc
 
-    immutable uint filter_step = dc.src_indexed ? 1 : dc.src_chans;
+    immutable size_t filter_step = dc.src_indexed ? 1 : dc.src_chans;
     immutable size_t tgt_linesize = (dc.w * dc.tgt_chans);
 
     ubyte[] depaletted_line = dc.src_indexed ? new ubyte[dc.w * 3] : null;
@@ -568,7 +568,7 @@ void uncompress_line(ref PNG_Decoder dc, ref int length, ref bool metaready, uby
     }
 }
 
-void recon(ubyte[] cline, in ubyte[] pline, ubyte ftype, int fstep) pure {
+void recon(ubyte[] cline, in ubyte[] pline, ubyte ftype, size_t fstep) pure {
     switch (ftype) with (PNG_FilterType) {
         case None:
             break;
