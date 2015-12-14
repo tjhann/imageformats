@@ -393,26 +393,10 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
     immutable size_t filter_step = dc.src_indexed ? 1 : dc.src_chans;
     immutable size_t tgt_linesize = (dc.w * dc.tgt_chans);
 
-    ubyte[] depaletted_line = dc.src_indexed ? new ubyte[dc.w * 3] : null;
+    ubyte[] depaletted = dc.src_indexed ? new ubyte[dc.w * 3] : null;
     ubyte[] result = new ubyte[dc.w * dc.h * dc.tgt_chans];
 
-    const LineConv chan_convert = get_converter(dc.src_chans, dc.tgt_chans);
-
-    void depalette_convert(in ubyte[] src_line, ubyte[] tgt_line) {
-        for (size_t s, d;  s < src_line.length;  s+=1, d+=3) {
-            size_t pidx = src_line[s] * 3;
-            if (dc.palette.length < pidx + 3)
-                throw new ImageIOException("palette idx wrong");
-            depaletted_line[d .. d+3] = dc.palette[pidx .. pidx+3];
-        }
-        chan_convert(depaletted_line[0 .. src_line.length*3], tgt_line);
-    }
-
-    void simple_convert(in ubyte[] src_line, ubyte[] tgt_line) {
-        chan_convert(src_line, tgt_line);
-    }
-
-    const convert = dc.src_indexed ? &depalette_convert : &simple_convert;
+    const LineConv convert = get_converter(dc.src_chans, dc.tgt_chans);
 
     if (dc.ilace == InterlaceMethod.None) {
         immutable size_t src_sl_size = dc.w * filter_step;
@@ -425,7 +409,13 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
             ubyte filter_type = cline[0];
 
             recon(cline[1..$], pline[1..$], filter_type, filter_step);
-            convert(cline[1 .. $], result[tgt_si .. tgt_si + tgt_linesize]);
+
+            if (dc.src_indexed) {
+                depalette(dc.palette, cline[1..$], depaletted);
+                convert(depaletted, result[tgt_si .. tgt_si + tgt_linesize]);
+            } else {
+                convert(cline[1 .. $], result[tgt_si .. tgt_si + tgt_linesize]);
+            }
             tgt_si += tgt_linesize;
 
             ubyte[] _swap = pline;
@@ -470,7 +460,14 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
                 ubyte filter_type = cline[0];
 
                 recon(cline[1..$], pline[1..$], filter_type, filter_step);
-                convert(cline[1 .. $], redlinebuf[0 .. redw[pass]*dc.tgt_chans]);
+
+                if (dc.src_indexed) {
+                    depalette(dc.palette, cline[1..$], depaletted);
+                    convert(depaletted[0 .. redw[pass]*3],
+                            redlinebuf[0 .. redw[pass]*dc.tgt_chans]);
+                } else {
+                    convert(cline[1 .. $], redlinebuf[0 .. redw[pass]*dc.tgt_chans]);
+                }
 
                 for (size_t i, redi; i < redw[pass]; ++i, redi += dc.tgt_chans) {
                     size_t tgt = tgt_px(i, j, dc.w) * dc.tgt_chans;
@@ -493,6 +490,15 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
             throw new ImageIOException("corrupt chunk");
     }
     return result;
+}
+
+void depalette(in ubyte[] palette, in ubyte[] src_line, ubyte[] depaletted) pure {
+    for (size_t s, d;  s < src_line.length;  s+=1, d+=3) {
+        size_t pidx = src_line[s] * 3;
+        if (palette.length < pidx + 3)
+            throw new ImageIOException("palette index wrong");
+        depaletted[d .. d+3] = palette[pidx .. pidx+3];
+    }
 }
 
 alias A7_Catapult = size_t function(size_t redx, size_t redy, size_t dstw);
