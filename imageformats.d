@@ -418,7 +418,6 @@ ubyte[] read_IDAT_stream(ref PNG_Decoder dc, int len) {
         immutable size_t src_sl_size = dc.w * filter_step;
         auto cline = new ubyte[src_sl_size+1];   // current line + filter byte
         auto pline = new ubyte[src_sl_size+1];   // previous line, inited to 0
-        debug(DebugPNG) assert(pline[0] == 0);
 
         size_t tgt_si = 0;    // scanline index in target buffer
         foreach (j; 0 .. dc.h) {
@@ -686,8 +685,7 @@ void write_IDATs(ref PNG_Encoder ec) {
 
     immutable size_t linesize = ec.w * ec.tgt_chans + 1; // +1 for filter type
     ubyte[] cline = new ubyte[linesize];
-    ubyte[] pline = new ubyte[linesize];
-    debug(DebugPNG) assert(pline[0] == 0);
+    ubyte[] pline = new ubyte[linesize];    // initialized to 0
 
     ubyte[] filtered_line = new ubyte[linesize];
     ubyte[] filtered_image;
