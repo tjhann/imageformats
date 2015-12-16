@@ -1,6 +1,7 @@
 # imageformats  [![Build Status](https://travis-ci.org/lgvz/imageformats.svg)](https://travis-ci.org/lgvz/imageformats)
 
-- returned image data is always 8-bit (Y/YA/RGB/RGBA)
+- Returned image data is 8-bit except PNG can also return 16-bit.
+- Image data can be converted to Y, YA, RGB or RGBA.
 
 | Format | Decoder            | Encoder                           |
 | ---    | ---                | ---                               |
