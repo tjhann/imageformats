@@ -436,25 +436,24 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
     bool metaready = false;     // chunk len, type, crc
 
     immutable size_t filter_step = dc.src_indexed ? 1 : dc.src_chans * ((dc.bpc == 8) ? 1 : 2);
-    immutable size_t tgt_linesize = (dc.w * dc.tgt_chans);
 
     ubyte[] depaletted = dc.src_indexed ? new ubyte[dc.w * 3] : null;
 
+    auto cline = new ubyte[dc.w * filter_step + 1]; // +1 for filter type byte
+    auto pline = new ubyte[dc.w * filter_step + 1]; // +1 for filter type byte
+    auto cline8 = (dc.req_bpc == 8 && dc.bpc != 8) ? new ubyte[dc.w * dc.src_chans] : null;
+    auto cline16 = (dc.req_bpc == 16) ? new ushort[dc.w * dc.src_chans] : null;
     ubyte[]  result8  = (dc.req_bpc == 8)  ? new ubyte[dc.w * dc.h * dc.tgt_chans] : null;
     ushort[] result16 = (dc.req_bpc == 16) ? new ushort[dc.w * dc.h * dc.tgt_chans] : null;
 
-    const LineConv!ubyte convert    = get_converter!ubyte(dc.src_chans, dc.tgt_chans);
+    const LineConv!ubyte convert8   = get_converter!ubyte(dc.src_chans, dc.tgt_chans);
     const LineConv!ushort convert16 = get_converter!ushort(dc.src_chans, dc.tgt_chans);
 
     if (dc.ilace == InterlaceMethod.None) {
-        immutable size_t src_sl_size = dc.w * filter_step;
-        immutable size_t src_samples = dc.w * dc.src_chans;
-        auto cline = new ubyte[src_sl_size+1];   // current line + filter byte
-        auto pline = new ubyte[src_sl_size+1];   // previous line, inited to 0
-        auto cline8 = (dc.req_bpc == 8 && dc.bpc != 8) ? new ubyte[src_samples] : null;
-        auto cline16 = (dc.req_bpc == 16) ? new ushort[src_samples] : null;
+        immutable size_t src_linelen = dc.w * dc.src_chans;
+        immutable size_t tgt_linelen = dc.w * dc.tgt_chans;
 
-        size_t tgt_si = 0;    // scanline index (in bytes) in target buffer
+        size_t ti = 0;    // target index
         foreach (j; 0 .. dc.h) {
             uncompress_line(dc, len, metaready, cline);
             ubyte filter_type = cline[0];
@@ -464,22 +463,21 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
             ubyte[] bytes;  // defiltered bytes or 8-bit samples from palette
             if (dc.src_indexed) {
                 depalette(dc.palette, cline[1..$], depaletted);
-                bytes = depaletted[0 .. src_samples];
+                bytes = depaletted[0 .. src_linelen];
             } else {
                 bytes = cline[1..$];
             }
 
-            // convert bytes to either 8-bit or 16-bit samples
-            samples_from_bytes(bytes, dc.bpc, dc.req_bpc, cline8, cline16);
-
             // convert colors
             if (dc.req_bpc == 8) {
-                convert(cline8[0 .. src_samples], result8[tgt_si .. tgt_si + tgt_linesize]);
+                line8_from_bytes(bytes, dc.bpc, cline8);
+                convert8(cline8[0 .. src_linelen], result8[ti .. ti + tgt_linelen]);
             } else {
-                convert16(cline16[0 .. src_samples], result16[tgt_si .. tgt_si + tgt_linesize]);
+                line16_from_bytes(bytes, dc.bpc, cline16);
+                convert16(cline16[0 .. src_linelen], result16[ti .. ti + tgt_linelen]);
             }
 
-            tgt_si += tgt_linesize;
+            ti += tgt_linelen;
 
             ubyte[] _swap = pline;
             pline = cline;
@@ -488,68 +486,58 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
     } else {
         // Adam7 interlacing
 
-        immutable size_t[7] redw = [
-            (dc.w + 7) / 8,
-            (dc.w + 3) / 8,
-            (dc.w + 3) / 4,
-            (dc.w + 1) / 4,
-            (dc.w + 1) / 2,
-            (dc.w + 0) / 2,
-            (dc.w + 0) / 1,
-        ];
-        immutable size_t[7] redh = [
-            (dc.h + 7) / 8,
-            (dc.h + 7) / 8,
-            (dc.h + 3) / 8,
-            (dc.h + 3) / 4,
-            (dc.h + 1) / 4,
-            (dc.h + 1) / 2,
-            (dc.h + 0) / 2,
-        ];
+        immutable size_t[7] redw = [(dc.w + 7) / 8,
+                                    (dc.w + 3) / 8,
+                                    (dc.w + 3) / 4,
+                                    (dc.w + 1) / 4,
+                                    (dc.w + 1) / 2,
+                                    (dc.w + 0) / 2,
+                                    (dc.w + 0) / 1];
 
-        const size_t max_scanline_size = dc.w * filter_step;
-        const linebuf0 = new ubyte[max_scanline_size+1]; // +1 for filter type byte
-        const linebuf1 = new ubyte[max_scanline_size+1]; // +1 for filter type byte
+        immutable size_t[7] redh = [(dc.h + 7) / 8,
+                                    (dc.h + 7) / 8,
+                                    (dc.h + 3) / 8,
+                                    (dc.h + 3) / 4,
+                                    (dc.h + 1) / 4,
+                                    (dc.h + 1) / 2,
+                                    (dc.h + 0) / 2];
+
         auto redline8 = (dc.req_bpc == 8) ? new ubyte[dc.w * dc.tgt_chans] : null;
         auto redline16 = (dc.req_bpc == 16) ? new ushort[dc.w * dc.tgt_chans] : null;
-        auto cline8 = (dc.req_bpc == 8 && dc.bpc != 8) ? new ubyte[dc.w * dc.src_chans] : null;
-        auto cline16 = (dc.req_bpc == 16) ? new ushort[dc.w * dc.src_chans] : null;
 
         foreach (pass; 0 .. 7) {
             const A7_Catapult tgt_px = a7_catapults[pass];   // target pixel
-            const size_t src_linesize = redw[pass] * filter_step;
-            const size_t src_samples  = redw[pass] * dc.src_chans;
-            auto cline = cast(ubyte[]) linebuf0[0 .. src_linesize+1];
-            auto pline = cast(ubyte[]) linebuf1[0 .. src_linesize+1];
-            pline[] = 0;
+            const size_t src_linelen = redw[pass] * dc.src_chans;
+            ubyte[] cln = cline[0 .. redw[pass] * filter_step + 1];
+            ubyte[] pln = pline[0 .. redw[pass] * filter_step + 1];
+            pln[] = 0;
 
             foreach (j; 0 .. redh[pass]) {
-                uncompress_line(dc, len, metaready, cline);
-                ubyte filter_type = cline[0];
+                uncompress_line(dc, len, metaready, cln);
+                ubyte filter_type = cln[0];
 
-                recon(cline[1..$], pline[1..$], filter_type, filter_step);
+                recon(cln[1..$], pln[1..$], filter_type, filter_step);
 
                 ubyte[] bytes;  // defiltered bytes or 8-bit samples from palette
                 if (dc.src_indexed) {
-                    depalette(dc.palette, cline[1..$], depaletted);
-                    bytes = depaletted[0 .. src_samples];
+                    depalette(dc.palette, cln[1..$], depaletted);
+                    bytes = depaletted[0 .. src_linelen];
                 } else {
-                    bytes = cline[1..$];
+                    bytes = cln[1..$];
                 }
-
-                // convert bytes to either 8-bit or 16-bit samples
-                samples_from_bytes(bytes, dc.bpc, dc.req_bpc, cline8, cline16);
 
                 // convert colors and sling pixels from reduced image to final buffer
                 if (dc.req_bpc == 8) {
-                    convert(cline8[0 .. src_samples], redline8[0 .. redw[pass]*dc.tgt_chans]);
+                    line8_from_bytes(bytes, dc.bpc, cline8);
+                    convert8(cline8[0 .. src_linelen], redline8[0 .. redw[pass]*dc.tgt_chans]);
                     for (size_t i, redi; i < redw[pass]; ++i, redi += dc.tgt_chans) {
                         size_t tgt = tgt_px(i, j, dc.w) * dc.tgt_chans;
                         result8[tgt .. tgt + dc.tgt_chans] =
                             redline8[redi .. redi + dc.tgt_chans];
                     }
                 } else {
-                    convert16(cline16[0 .. src_samples], redline16[0 .. redw[pass]*dc.tgt_chans]);
+                    line16_from_bytes(bytes, dc.bpc, cline16);
+                    convert16(cline16[0 .. src_linelen], redline16[0 .. redw[pass]*dc.tgt_chans]);
                     for (size_t i, redi; i < redw[pass]; ++i, redi += dc.tgt_chans) {
                         size_t tgt = tgt_px(i, j, dc.w) * dc.tgt_chans;
                         result16[tgt .. tgt + dc.tgt_chans] =
@@ -557,9 +545,9 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
                     }
                 }
 
-                ubyte[] _swap = pline;
-                pline = cline;
-                cline = _swap;
+                ubyte[] _swap = pln;
+                pln = cln;
+                cln = _swap;
             }
         }
     }
@@ -580,21 +568,27 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
     }
 }
 
-void samples_from_bytes(ubyte[] bytes, int bpc, int req_bpc, ref ubyte[] cline8,
-                                                                ushort[] cline16)
-{
-    if (req_bpc == 8) {
-        switch (bpc) {
-            case 8: cline8 = bytes; break;
-            case 16: line8_from_bpc16(bytes, cline8); break;
-            default: throw new ImageIOException("unsupported bit depth (and bug)");
-        }
-    } else {
-        switch (bpc) {
-            case 8: line16_from_bpc8(bytes, cline16); break;
-            case 16: line16_from_bpc16(bytes, cline16); break;
-            default: throw new ImageIOException("unsupported bit depth (and bug)");
-        }
+void line8_from_bytes(ubyte[] src, int bpc, ref ubyte[] tgt) {
+    switch (bpc) {
+    case 8:
+        tgt = src;
+        break;
+    case 16:
+        for (size_t k, t;   k < src.length;   k+=2, t+=1) { tgt[t] = src[k]; /* truncate */ }
+        break;
+    default: throw new ImageIOException("unsupported bit depth (and bug)");
+    }
+}
+
+void line16_from_bytes(in ubyte[] src, int bpc, ushort[] tgt) {
+    switch (bpc) {
+    case 8:
+        for (size_t k;   k < src.length;   k+=1) { tgt[k] = src[k] * 256 + 128; }
+        break;
+    case 16:
+        for (size_t k, t;   k < src.length;   k+=2, t+=1) { tgt[t] = src[k] << 8 | src[k+1]; }
+        break;
+    default: throw new ImageIOException("unsupported bit depth (and bug)");
     }
 }
 
@@ -2804,24 +2798,6 @@ void copy_line(T)(in T[] src, T[] tgt) pure nothrow {
 
 T luminance(T)(T r, T g, T b) pure nothrow {
     return cast(T) (0.21*r + 0.64*g + 0.15*b); // somewhat arbitrary weights
-}
-
-void line16_from_bpc16(in ubyte[] src, ushort[] tgt) pure nothrow {
-    for (size_t k, t;   k < src.length;   k+=2, t+=1) {
-        tgt[t] = src[k] << 8 | src[k+1];
-    }
-}
-
-void line16_from_bpc8(in ubyte[] src, ushort[] tgt) pure nothrow {
-    for (size_t k;   k < src.length;   k+=1) {
-        tgt[k] = src[k] * 256 + 128;
-    }
-}
-
-void line8_from_bpc16(in ubyte[] src, ubyte[] tgt) pure nothrow {
-    for (size_t k, t;   k < src.length;   k+=2, t+=1) {
-        tgt[t] = src[k];    // truncate
-    }
 }
 
 void Y_to_YA(T)(in T[] src, T[] tgt) pure nothrow {
