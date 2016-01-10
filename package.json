@@ -3,6 +3,4 @@
 	"description": "Decoders for PNG, TGA, BMP, JPEG and encoders for PNG, TGA, BMP.",
 	"authors": ["Tero Hänninen"],
 	"license": "BSL-1.0",
-	"importPaths": ["."],
-	"sourceFiles": ["imageformats.d"]
 }
