@@ -4,10 +4,10 @@ module imageformats;
 
 import std.stdio;    // File
 import std.string;  // toLower, lastIndexOf
-import imageformats.png;
-import imageformats.tga;
-import imageformats.bmp;
-import imageformats.jpeg;
+public import imageformats.png;
+public import imageformats.tga;
+public import imageformats.bmp;
+public import imageformats.jpeg;
 
 /// Image
 struct IFImage {
