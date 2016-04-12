@@ -12,7 +12,7 @@ private:
 
 public bool detect_jpeg(Reader stream) {
     try {
-        long w, h, c;
+        int w, h, c;
         read_jpeg_info(stream, w, h, c);
         return true;
     } catch {
@@ -35,7 +35,7 @@ public IFImage read_jpeg_from_mem(in ubyte[] source, long req_chans = 0) {
 }
 
 ///
-public void read_jpeg_info(in char[] filename, out long w, out long h, out long chans) {
+public void read_jpeg_info(in char[] filename, out int w, out int h, out int chans) {
     scope reader = new FileReader(filename);
     return read_jpeg_info(reader, w, h, chans);
 }
@@ -1004,7 +1004,7 @@ pure ubyte stbi__clamp(int x) {
 // the above is adapted from stb_image
 // ------------------------------------------------------------
 
-package void read_jpeg_info(Reader stream, out long w, out long h, out long chans) {
+package void read_jpeg_info(Reader stream, out int w, out int h, out int chans) {
     ubyte[2] marker = void;
     stream.readExact(marker, 2);
 
@@ -1045,4 +1045,3 @@ package void read_jpeg_info(Reader stream, out long w, out long h, out long chan
     }
     assert(0);
 }
-

@@ -67,7 +67,7 @@ public ubyte[] write_tga_to_mem(long w, long h, in ubyte[] data, long tgt_chans 
 }
 
 ///
-public void read_tga_info(in char[] filename, out long w, out long h, out long chans) {
+public void read_tga_info(in char[] filename, out int w, out int h, out int chans) {
     scope reader = new FileReader(filename);
     return read_tga_info(reader, w, h, chans);
 }
@@ -420,7 +420,7 @@ enum TGA_DataType : ubyte {
     Gray_RLE      = 11,
 }
 
-package void read_tga_info(Reader stream, out long w, out long h, out long chans) {
+package void read_tga_info(Reader stream, out int w, out int h, out int chans) {
     TGA_Header hdr = read_tga_header(stream);
     w = hdr.width;
     h = hdr.height;

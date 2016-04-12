@@ -60,7 +60,7 @@ void write_image(in char[] file, long w, long h, in ubyte[] data, long req_chans
 
 /// Returns basic info about an image.
 /// If number of channels is unknown chans is set to zero.
-void read_image_info(in char[] file, out long w, out long h, out long chans) {
+void read_image_info(in char[] file, out int w, out int h, out int chans) {
     scope reader = new FileReader(file);
     try {
         return read_png_info(reader, w, h, chans);

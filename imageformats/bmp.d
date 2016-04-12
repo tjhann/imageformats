@@ -90,7 +90,7 @@ public struct DibV5 {
 }
 
 ///
-public void read_bmp_info(in char[] filename, out long w, out long h, out long chans) {
+public void read_bmp_info(in char[] filename, out int w, out int h, out int chans) {
     scope reader = new FileReader(filename);
     return read_bmp_info(reader, w, h, chans);
 }
@@ -350,7 +350,7 @@ package IFImage read_bmp(Reader stream, long req_chans = 0) {
     return ret;
 }
 
-package void read_bmp_info(Reader stream, out long w, out long h, out long chans) {
+package void read_bmp_info(Reader stream, out int w, out int h, out int chans) {
     BMP_Header hdr = read_bmp_header(stream);
     w = abs(hdr.width);
     h = abs(hdr.height);

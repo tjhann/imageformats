@@ -77,7 +77,7 @@ public ubyte[] write_png_to_mem(long w, long h, in ubyte[] data, long tgt_chans 
 }
 
 ///
-public void read_png_info(in char[] filename, out long w, out long h, out long chans) {
+public void read_png_info(in char[] filename, out int w, out int h, out int chans) {
     scope reader = new FileReader(filename);
     return read_png_info(reader, w, h, chans);
 }
@@ -724,7 +724,7 @@ void write_IDAT_chunk(ref PNG_Encoder ec) {
     ec.writelen = 0;
 }
 
-package void read_png_info(Reader stream, out long w, out long h, out long chans) {
+package void read_png_info(Reader stream, out int w, out int h, out int chans) {
     PNG_Header hdr = read_png_header(stream);
     w = hdr.width;
     h = hdr.height;
