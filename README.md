@@ -23,7 +23,7 @@ void main() {
     write_image("peruna.tga", im.w, im.h, im.pixels, ColFmt.RGBA);
 
     // get basic info without decoding
-    long w, h, chans;
+    int w, h, chans;
     read_image_info("peruna.png", w, h, chans);
 
     // there are also format specific functions
