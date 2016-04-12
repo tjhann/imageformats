@@ -41,10 +41,10 @@ public BMP_Header read_bmp_header(in char[] filename) {
 
 ///
 public struct BMP_Header {
-    size_t file_size;
-    size_t pixel_data_offset;
+    uint file_size;
+    uint pixel_data_offset;
 
-    size_t dib_size;
+    uint dib_size;
     int width;
     int height;
     ushort planes;
@@ -60,10 +60,10 @@ public struct BMP_Header {
 /// Part of BMP header, not always present.
 public struct DibV1 {
     uint compression;
-    size_t idat_size;
-    size_t pixels_per_meter_x;
-    size_t pixels_per_meter_y;
-    size_t palette_length;
+    uint idat_size;
+    uint pixels_per_meter_x;
+    uint pixels_per_meter_y;
+    uint palette_length;
     uint important_color_count;
 }
 
@@ -116,7 +116,7 @@ BMP_Header read_bmp_header(Reader stream) {
     if (tmp[0..2] != ['B', 'M'])
         throw new ImageIOException("corrupt header");
 
-    size_t dib_size = littleEndianToNative!uint(tmp[14..18]);
+    uint dib_size = littleEndianToNative!uint(tmp[14..18]);
     uint dib_version;
     switch (dib_size) {
         case 12: dib_version = 0; break;
@@ -139,10 +139,10 @@ BMP_Header read_bmp_header(Reader stream) {
     if (1 <= dib_version) {
         DibV1 v1 = {
             compression           : littleEndianToNative!uint(dib_header[12..16]),
-            idat_size             : cast(size_t) littleEndianToNative!uint(dib_header[16..20]),
-            pixels_per_meter_x    : cast(size_t) littleEndianToNative!uint(dib_header[20..24]),
-            pixels_per_meter_y    : cast(size_t) littleEndianToNative!uint(dib_header[24..28]),
-            palette_length        : cast(size_t) littleEndianToNative!uint(dib_header[28..32]),
+            idat_size             : littleEndianToNative!uint(dib_header[16..20]),
+            pixels_per_meter_x    : littleEndianToNative!uint(dib_header[20..24]),
+            pixels_per_meter_y    : littleEndianToNative!uint(dib_header[24..28]),
+            palette_length        : littleEndianToNative!uint(dib_header[28..32]),
             important_color_count : littleEndianToNative!uint(dib_header[32..36]),
         };
         dib_v1 = v1;
@@ -194,8 +194,8 @@ BMP_Header read_bmp_header(Reader stream) {
     }
 
     BMP_Header header = {
-        file_size             : cast(size_t) littleEndianToNative!uint(tmp[2..6]),
-        pixel_data_offset     : cast(size_t) littleEndianToNative!uint(tmp[10..14]),
+        file_size             : littleEndianToNative!uint(tmp[2..6]),
+        pixel_data_offset     : littleEndianToNative!uint(tmp[10..14]),
         width                 : width,
         height                : height,
         planes                : planes,
