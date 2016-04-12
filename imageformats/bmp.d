@@ -45,10 +45,10 @@ public struct BMP_Header {
     size_t pixel_data_offset;
 
     size_t dib_size;
-    ptrdiff_t width;
-    ptrdiff_t height;
+    int width;
+    int height;
     ushort planes;
-    size_t bits_pp;
+    int bits_pp;
     uint dib_version;
     DibV1 dib_v1;
     DibV2 dib_v2;
@@ -180,17 +180,17 @@ BMP_Header read_bmp_header(Reader stream) {
         dib_v5 = v5;
     }
 
-    ptrdiff_t width, height; ushort planes; size_t bits_pp;
+    int width, height; ushort planes; int bits_pp;
     if (0 == dib_version) {
         width = littleEndianToNative!ushort(dib_header[0..2]);
         height = littleEndianToNative!ushort(dib_header[2..4]);
         planes = littleEndianToNative!ushort(dib_header[4..6]);
-        bits_pp = cast(size_t) littleEndianToNative!ushort(dib_header[6..8]);
+        bits_pp = littleEndianToNative!ushort(dib_header[6..8]);
     } else {
         width = littleEndianToNative!int(dib_header[0..4]);
         height = littleEndianToNative!int(dib_header[4..8]);
         planes = littleEndianToNative!ushort(dib_header[8..10]);
-        bits_pp = cast(size_t) littleEndianToNative!ushort(dib_header[10..12]);
+        bits_pp = littleEndianToNative!ushort(dib_header[10..12]);
     }
 
     BMP_Header header = {

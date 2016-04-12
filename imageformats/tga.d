@@ -201,7 +201,7 @@ void write_tga(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 
 
 struct TGA_Decoder {
     Reader stream;
-    size_t w, h;
+    int w, h;
     bool origin_at_top;    // src
     uint bytes_pp;
     bool rle;   // run length compressed

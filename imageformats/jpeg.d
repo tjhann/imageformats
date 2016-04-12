@@ -85,7 +85,7 @@ struct JPEG_Decoder {
     ubyte num_comps;
     int tgt_chans;
 
-    size_t width, height;
+    int width, height;
 
     int hmax, vmax;
 

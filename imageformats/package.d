@@ -11,14 +11,14 @@ public import imageformats.jpeg;
 
 /// Image
 struct IFImage {
-    long        w, h;
+    int         w, h;
     ColFmt      c;
     ubyte[]     pixels;
 }
 
 /// Image
 struct IFImage16 {
-    long        w, h;
+    int         w, h;
     ColFmt      c;
     ushort[]    pixels;
 }

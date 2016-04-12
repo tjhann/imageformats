@@ -190,7 +190,7 @@ struct PNG_Decoder {
     int tgt_chans;
     int bpc;
     int req_bpc;
-    size_t w, h;
+    int w, h;
     ubyte ilace;
 
     UnCompress uc;
