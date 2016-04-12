@@ -449,9 +449,9 @@ void decode_scan(ref JPEG_Decoder dc) {
                         // decode entropy, dequantize & dezigzag
                         short[64] data = decode_block(dc, *comp, dc.qtables[comp.qtable]);
                         // idct & level-shift
-                        long outx = (mcu_i * comp.sfx + du_i) * 8;
-                        long outy = (mcu_j * comp.sfy + du_j) * 8;
-                        long dst_stride = dc.num_mcu_x * comp.sfx*8;
+                        int outx = (mcu_i * comp.sfx + du_i) * 8;
+                        int outy = (mcu_j * comp.sfy + du_j) * 8;
+                        int dst_stride = dc.num_mcu_x * comp.sfx*8;
                         ubyte* dst = comp.data.ptr + outy*dst_stride + outx;
                         stbi__idct_block(dst, dst_stride, data);
                     }
@@ -921,7 +921,7 @@ pure void STBI__IDCT_1D(ref int t0, ref int t1, ref int t2, ref int t3,
 }
 
 // idct and level-shift
-pure void stbi__idct_block(ubyte* dst, long dst_stride, in ref short[64] data) {
+pure void stbi__idct_block(ubyte* dst, int dst_stride, in ref short[64] data) {
    int i;
    int[64] val;
    int* v = val.ptr;
