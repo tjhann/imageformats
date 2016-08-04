@@ -47,7 +47,7 @@ package IFImage read_jpeg(Reader stream, long req_chans = 0) {
     // SOI
     ubyte[2] tmp = void;
     stream.readExact(tmp, tmp.length);
-    if (tmp[0..2] != [0xff, 0xd8])
+    if (tmp[0..2] != jpeg_soi_marker)
         throw new ImageIOException("not JPEG");
 
     JPEG_Decoder dc = { stream: stream };
@@ -1001,6 +1001,8 @@ pure ubyte stbi__clamp(int x) {
    return cast(ubyte) x;
 }
 
+static immutable ubyte[2] jpeg_soi_marker = [0xff, 0xd8];
+
 // the above is adapted from stb_image
 // ------------------------------------------------------------
 
@@ -1009,7 +1011,7 @@ package void read_jpeg_info(Reader stream, out int w, out int h, out int chans) 
     stream.readExact(marker, 2);
 
     // SOI
-    if (marker[0..2] != [0xff, 0xd8])
+    if (marker[0..2] != jpeg_soi_marker)
         throw new ImageIOException("not JPEG");
 
     while (true) {
