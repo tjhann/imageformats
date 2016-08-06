@@ -7,12 +7,14 @@ import imageformats;
 
 private:
 
+static immutable bmp_header = ['B', 'M'];
+
 public bool detect_bmp(Reader stream) {
     try {
         ubyte[18] tmp = void;  // bmp header + size of dib header
         stream.readExact(tmp, tmp.length);
         size_t ds = littleEndianToNative!uint(tmp[14..18]);
-        return (tmp[0..2] == ['B', 'M']
+        return (tmp[0..2] == bmp_header
             && (ds == 12 || ds == 40 || ds == 52 || ds == 56 || ds == 108 || ds == 124));
     } catch {
         return false;
@@ -113,7 +115,7 @@ BMP_Header read_bmp_header(Reader stream) {
     ubyte[18] tmp = void;  // bmp header + size of dib header
     stream.readExact(tmp[], tmp.length);
 
-    if (tmp[0..2] != ['B', 'M'])
+    if (tmp[0..2] != bmp_header)
         throw new ImageIOException("corrupt header");
 
     uint dib_size = littleEndianToNative!uint(tmp[14..18]);
@@ -387,7 +389,8 @@ void write_bmp(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 
     }
 
     ubyte[14+dib_size] hdr;
-    hdr[0..2] = [0x42, 0x4d];
+    hdr[0] = 0x42;
+    hdr[1] = 0x4d;
     hdr[2..6] = nativeToLittleEndian(cast(uint) filesize);
     hdr[6..10] = 0;                                                // reserved
     hdr[10..14] = nativeToLittleEndian(cast(uint) idat_offset);    // offset of pixel data
@@ -401,12 +404,17 @@ void write_bmp(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 
     if (tgt_chans == 3) {
         hdr[54..70] = 0;    // dib v2 and v3
     } else {
-        hdr[54..58] = [0, 0, 0xff, 0];
-        hdr[58..62] = [0, 0xff, 0, 0];
-        hdr[62..66] = [0xff, 0, 0, 0];
-        hdr[66..70] = [0, 0, 0, 0xff];
+        static immutable ubyte[16] b = 
+        [
+            0, 0, 0xff, 0,
+            0, 0xff, 0, 0,
+            0xff, 0, 0, 0,
+            0, 0, 0, 0xff
+        ];
+        hdr[54..70] = b;
     }
-    hdr[70..74] = ['B', 'G', 'R', 's'];
+    static immutable ubyte[4] BGRs = ['B', 'G', 'R', 's'];
+    hdr[70..74] = BGRs;
     hdr[74..122] = 0;
     stream.rawWrite(hdr);
 

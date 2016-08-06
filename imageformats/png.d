@@ -89,7 +89,7 @@ PNG_Header read_png_header(Reader stream) {
     ubyte[4] crc = crc32Of(tmp[12..29]);
     reverse(crc[]);
     if ( tmp[0..8] != png_file_header[0..$]              ||
-         tmp[8..16] != [0x0,0x0,0x0,0xd,'I','H','D','R'] ||
+         tmp[8..16] != png_image_header                  ||
          crc != tmp[29..33] )
         throw new ImageIOException("corrupt header");
 
@@ -163,6 +163,9 @@ PNG_Decoder init_png_decoder(Reader stream, long req_chans, int req_bpc) {
 
 immutable ubyte[8] png_file_header =
     [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+immutable ubyte[8] png_image_header = 
+    [0x0, 0x0, 0x0, 0xd, 'I','H','D','R'];
 
 int channels(PNG_ColorType ct) pure nothrow {
     final switch (ct) with (PNG_ColorType) {
@@ -251,7 +254,8 @@ Buffer decode_png(ref PNG_Decoder dc) {
                 if (stage != Stage.IDAT_parsed)
                     throw new ImageIOException("corrupt chunk stream");
                 dc.stream.readExact(dc.chunkmeta, 4); // crc
-                if (len != 0 || dc.chunkmeta[0..4] != [0xae, 0x42, 0x60, 0x82])
+                static immutable ubyte[4] expectedCRC = [0xae, 0x42, 0x60, 0x82];
+                if (len != 0 || dc.chunkmeta[0..4] != expectedCRC)
                     throw new ImageIOException("corrupt chunk");
                 stage = Stage.IEND_parsed;
                 break;
@@ -633,7 +637,7 @@ struct PNG_Encoder {
 void write_png(ref PNG_Encoder ec) {
     ubyte[33] hdr = void;
     hdr[ 0 ..  8] = png_file_header;
-    hdr[ 8 .. 16] = [0x0, 0x0, 0x0, 0xd, 'I','H','D','R'];
+    hdr[ 8 .. 16] = png_image_header;
     hdr[16 .. 20] = nativeToBigEndian(cast(uint) ec.w);
     hdr[20 .. 24] = nativeToBigEndian(cast(uint) ec.h);
     hdr[24      ] = 8;  // bit depth
@@ -658,7 +662,8 @@ void write_IDATs(ref PNG_Encoder ec) {
     ec.writelen = 0;
     ec.chunk_buf = new ubyte[8 + max_idatlen + 4];
     ec.data_buf = ec.chunk_buf[8 .. 8 + max_idatlen];
-    ec.chunk_buf[4 .. 8] = ['I','D','A','T'];
+    static immutable ubyte[4] IDAT = ['I','D','A','T'];
+    ec.chunk_buf[4 .. 8] = IDAT;
 
     immutable size_t linesize = ec.w * ec.tgt_chans + 1; // +1 for filter type
     ubyte[] cline = new ubyte[linesize];
