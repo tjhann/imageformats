@@ -39,6 +39,12 @@ public PNG_Header read_png_header(in char[] filename) {
 }
 
 ///
+public PNG_Header read_png_header_from_mem(in ubyte[] source) {
+    scope reader = new MemReader(source);
+    return read_png_header(reader);
+}
+
+///
 public IFImage read_png(in char[] filename, long req_chans = 0) {
     scope reader = new FileReader(filename);
     return read_png(reader, req_chans);
@@ -79,6 +85,12 @@ public ubyte[] write_png_to_mem(long w, long h, in ubyte[] data, long tgt_chans 
 ///
 public void read_png_info(in char[] filename, out int w, out int h, out int chans) {
     scope reader = new FileReader(filename);
+    return read_png_info(reader, w, h, chans);
+}
+
+///
+public void read_png_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
+    scope reader = new MemReader(source);
     return read_png_info(reader, w, h, chans);
 }
 

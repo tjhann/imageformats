@@ -42,6 +42,12 @@ public BMP_Header read_bmp_header(in char[] filename) {
 }
 
 ///
+public BMP_Header read_bmp_header_from_mem(in ubyte[] source) {
+    scope reader = new MemReader(source);
+    return read_bmp_header(reader);
+}
+
+///
 public struct BMP_Header {
     uint file_size;
     uint pixel_data_offset;
@@ -94,6 +100,12 @@ public struct DibV5 {
 ///
 public void read_bmp_info(in char[] filename, out int w, out int h, out int chans) {
     scope reader = new FileReader(filename);
+    return read_bmp_info(reader, w, h, chans);
+}
+
+///
+public void read_bmp_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
+    scope reader = new MemReader(source);
     return read_bmp_info(reader, w, h, chans);
 }
 

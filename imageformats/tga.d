@@ -41,6 +41,12 @@ public TGA_Header read_tga_header(in char[] filename) {
 }
 
 ///
+public TGA_Header read_tga_header_from_mem(in ubyte[] source) {
+    scope reader = new MemReader(source);
+    return read_tga_header(reader);
+}
+
+///
 public IFImage read_tga(in char[] filename, long req_chans = 0) {
     scope reader = new FileReader(filename);
     return read_tga(reader, req_chans);
@@ -69,6 +75,12 @@ public ubyte[] write_tga_to_mem(long w, long h, in ubyte[] data, long tgt_chans 
 ///
 public void read_tga_info(in char[] filename, out int w, out int h, out int chans) {
     scope reader = new FileReader(filename);
+    return read_tga_info(reader, w, h, chans);
+}
+
+///
+public void read_tga_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
+    scope reader = new MemReader(source);
     return read_tga_info(reader, w, h, chans);
 }
 

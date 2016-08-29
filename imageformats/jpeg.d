@@ -40,6 +40,12 @@ public void read_jpeg_info(in char[] filename, out int w, out int h, out int cha
     return read_jpeg_info(reader, w, h, chans);
 }
 
+///
+public void read_jpeg_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
+    scope reader = new MemReader(source);
+    return read_jpeg_info(reader, w, h, chans);
+}
+
 package IFImage read_jpeg(Reader stream, long req_chans = 0) {
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
