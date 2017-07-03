@@ -15,7 +15,7 @@ public bool detect_jpeg(Reader stream) {
         int w, h, c;
         read_jpeg_info(stream, w, h, c);
         return true;
-    } catch {
+    } catch (Throwable) {
         return false;
     } finally {
         stream.seek(0, SEEK_SET);

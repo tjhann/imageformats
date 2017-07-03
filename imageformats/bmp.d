@@ -16,7 +16,7 @@ public bool detect_bmp(Reader stream) {
         size_t ds = littleEndianToNative!uint(tmp[14..18]);
         return (tmp[0..2] == bmp_header
             && (ds == 12 || ds == 40 || ds == 52 || ds == 56 || ds == 108 || ds == 124));
-    } catch {
+    } catch (Throwable) {
         return false;
     } finally {
         stream.seek(0, SEEK_SET);

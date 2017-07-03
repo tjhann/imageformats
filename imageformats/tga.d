@@ -11,7 +11,7 @@ public bool detect_tga(Reader stream) {
     try {
         auto hdr = read_tga_header(stream);
         return true;
-    } catch {
+    } catch (Throwable) {
         return false;
     } finally {
         stream.seek(0, SEEK_SET);
