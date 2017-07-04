@@ -64,22 +64,22 @@ void read_image_info(in char[] file, out int w, out int h, out int chans) {
     scope reader = new FileReader(file);
     try {
         return read_png_info(reader, w, h, chans);
-    } catch {
+    } catch (Throwable) {
         reader.seek(0, SEEK_SET);
     }
     try {
         return read_jpeg_info(reader, w, h, chans);
-    } catch {
+    } catch (Throwable) {
         reader.seek(0, SEEK_SET);
     }
     try {
         return read_bmp_info(reader, w, h, chans);
-    } catch {
+    } catch (Throwable) {
         reader.seek(0, SEEK_SET);
     }
     try {
         return read_tga_info(reader, w, h, chans);
-    } catch {
+    } catch (Throwable) {
         reader.seek(0, SEEK_SET);
     }
     throw new ImageIOException("unknown image type");

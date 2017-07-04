@@ -14,7 +14,7 @@ public bool detect_png(Reader stream) {
         ubyte[8] tmp = void;
         stream.readExact(tmp, tmp.length);
         return (tmp[0..8] == png_file_header[0..$]);
-    } catch {
+    } catch (Throwable) {
         return false;
     } finally {
         stream.seek(0, SEEK_SET);
