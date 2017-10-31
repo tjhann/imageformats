@@ -783,13 +783,13 @@ ubyte[] upsample_luma(in ref JPEG_Decoder dc, ubyte[] result) {
     const y_step0 = cast(float) dc.comps[0].sfy / cast(float) dc.vmax;
     const x_step0 = cast(float) dc.comps[0].sfx / cast(float) dc.hmax;
 
-    float y0 = y_step0 * 0.5;
+    float y0 = y_step0 * 0.5f;
     size_t y0i = 0;
 
     size_t di;
 
     foreach (j; 0 .. dc.height) {
-        float x0 = x_step0 * 0.5;
+        float x0 = x_step0 * 0.5f;
         size_t x0i = 0;
         foreach (i; 0 .. dc.width) {
             result[di] = dc.comps[0].data[y0i + x0i];
@@ -797,10 +797,10 @@ ubyte[] upsample_luma(in ref JPEG_Decoder dc, ubyte[] result) {
                 result[di+1] = 255;
             di += dc.tgt_chans;
             x0 += x_step0;
-            if (x0 >= 1.0) { x0 -= 1.0; x0i += 1; }
+            if (x0 >= 1.0f) { x0 -= 1.0f; x0i += 1; }
         }
         y0 += y_step0;
-        if (y0 >= 1.0) { y0 -= 1.0; y0i += stride0; }
+        if (y0 >= 1.0f) { y0 -= 1.0f; y0i += stride0; }
     }
     return result;
 }
@@ -818,9 +818,9 @@ ubyte[] upsample(in ref JPEG_Decoder dc, ubyte[] result) {
     const x_step1 = cast(float) dc.comps[1].sfx / cast(float) dc.hmax;
     const x_step2 = cast(float) dc.comps[2].sfx / cast(float) dc.hmax;
 
-    float y0 = y_step0 * 0.5;
-    float y1 = y_step1 * 0.5;
-    float y2 = y_step2 * 0.5;
+    float y0 = y_step0 * 0.5f;
+    float y1 = y_step1 * 0.5f;
+    float y2 = y_step2 * 0.5f;
     size_t y0i = 0;
     size_t y1i = 0;
     size_t y2i = 0;
@@ -828,9 +828,9 @@ ubyte[] upsample(in ref JPEG_Decoder dc, ubyte[] result) {
     size_t di;
 
     foreach (_j; 0 .. dc.height) {
-        float x0 = x_step0 * 0.5;
-        float x1 = x_step1 * 0.5;
-        float x2 = x_step2 * 0.5;
+        float x0 = x_step0 * 0.5f;
+        float x1 = x_step1 * 0.5f;
+        float x2 = x_step2 * 0.5f;
         size_t x0i = 0;
         size_t x1i = 0;
         size_t x2i = 0;
@@ -846,16 +846,16 @@ ubyte[] upsample(in ref JPEG_Decoder dc, ubyte[] result) {
             x0 += x_step0;
             x1 += x_step1;
             x2 += x_step2;
-            if (x0 >= 1.0) { x0 -= 1.0; x0i += 1; }
-            if (x1 >= 1.0) { x1 -= 1.0; x1i += 1; }
-            if (x2 >= 1.0) { x2 -= 1.0; x2i += 1; }
+            if (x0 >= 1.0) { x0 -= 1.0f; x0i += 1; }
+            if (x1 >= 1.0) { x1 -= 1.0f; x1i += 1; }
+            if (x2 >= 1.0) { x2 -= 1.0f; x2i += 1; }
         }
         y0 += y_step0;
         y1 += y_step1;
         y2 += y_step2;
-        if (y0 >= 1.0) { y0 -= 1.0; y0i += stride0; }
-        if (y1 >= 1.0) { y1 -= 1.0; y1i += stride1; }
-        if (y2 >= 1.0) { y2 -= 1.0; y2i += stride2; }
+        if (y0 >= 1.0) { y0 -= 1.0f; y0i += stride0; }
+        if (y1 >= 1.0) { y1 -= 1.0f; y1i += stride1; }
+        if (y2 >= 1.0) { y2 -= 1.0f; y2i += stride2; }
     }
     return result;
 }
