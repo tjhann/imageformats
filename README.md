@@ -14,21 +14,19 @@
 import imageformats;
 
 void main() {
-    // optional last argument defines conversion
-    IFImage im = read_image("peruna.png");
-    IFImage im2 = read_image("peruna.png", ColFmt.YA);
-    IFImage im3 = read_image("peruna.png", ColFmt.RGB);
+    IFImage i0 = read_image("peruna.png");
+    IFImage i1 = read_image("peruna.png", ColFmt.YA);   // convert
+    IFImage i2 = read_image("peruna.png", ColFmt.RGB);
 
-    write_image("peruna.tga", im.w, im.h, im.pixels);
-    write_image("peruna.tga", im.w, im.h, im.pixels, ColFmt.RGBA);
+    write_image("peruna.tga", i0.w, i0.h, i0.pixels);
+    write_image("peruna.tga", i0.w, i0.h, i0.pixels, ColFmt.RGBA);
 
-    // get basic info without decoding
     int w, h, chans;
-    read_image_info("peruna.png", w, h, chans);
+    read_image_info("peruna.png", w, h, chans);     // no decoding
 
-    // there are also format specific functions
-    PNG_Header hdr = read_png_header("peruna.png"); // get detailed info
-    IFImage im4 = read_jpeg("porkkana.jpg");
-    write_tga("porkkana.tga", im4.w, im4.h, im4.pixels);
+    // format specific functions
+    PNG_Header hdr = read_png_header("peruna.png");
+    IFImage i3 = read_jpeg("porkkana.jpg");
+    write_tga("porkkana.tga", i3.w, i3.h, i3.pixels);
 }
 ```
