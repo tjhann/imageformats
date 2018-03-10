@@ -7,7 +7,7 @@ import imageformats;
 
 private:
 
-static immutable bmp_header = ['B', 'M'];
+immutable bmp_header = ['B', 'M'];
 
 public bool detect_bmp(Reader stream) {
     try {

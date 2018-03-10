@@ -45,7 +45,7 @@ IFImage read_image_from_mem(in ubyte[] source, long req_chans = 0) {
 
 /// Writes an image to file.
 void write_image(in char[] file, long w, long h, in ubyte[] data, long req_chans = 0) {
-    const(char)[] ext = extract_extension_lowercase(file);
+    const char[] ext = extract_extension_lowercase(file);
 
     void function(Writer, long, long, in ubyte[], long) write_image;
     switch (ext) {
