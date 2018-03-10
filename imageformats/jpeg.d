@@ -2,9 +2,9 @@
 
 module imageformats.jpeg;
 
-import std.math;    // floor, ceil
-import std.bitmanip;   // endianness stuff
-import std.stdio;    // File
+import std.math         : ceil;
+import std.bitmanip     : bigEndianToNative;
+import std.stdio        : File, SEEK_SET, SEEK_CUR;
 import core.stdc.stdlib : alloca;
 import imageformats;
 

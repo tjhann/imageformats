@@ -1,8 +1,8 @@
 module imageformats.bmp;
 
-import std.bitmanip;   // endianness stuff
-import std.stdio;    // File
-import std.math;
+import std.bitmanip : littleEndianToNative, nativeToLittleEndian;
+import std.stdio    : File, SEEK_SET;
+import std.math     : abs;
 import imageformats;
 
 private:

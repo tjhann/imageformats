@@ -1,10 +1,10 @@
 module imageformats.png;
 
-import std.algorithm;   // min, reverse
-import std.bitmanip;   // endianness stuff
-import std.stdio;    // File
-import std.digest.crc;
-import std.zlib;
+import std.algorithm  : min, reverse;
+import std.bitmanip   : bigEndianToNative, nativeToBigEndian;
+import std.stdio      : File, SEEK_SET;
+import std.digest.crc : CRC32, crc32Of;
+import std.zlib       : UnCompress, HeaderFormat, compress;
 import imageformats;
 
 private:

@@ -1,8 +1,8 @@
 module imageformats.tga;
 
-import std.algorithm;
-import std.bitmanip;   // endianness stuff
-import std.stdio;    // File
+import std.algorithm : min;
+import std.bitmanip  : littleEndianToNative, nativeToLittleEndian;
+import std.stdio     : File, SEEK_SET, SEEK_CUR;
 import imageformats;
 
 private:
