@@ -5,6 +5,7 @@ module imageformats.jpeg;
 import std.math         : ceil;
 import std.bitmanip     : bigEndianToNative;
 import std.stdio        : File, SEEK_SET, SEEK_CUR;
+import std.typecons     : scoped;
 import core.stdc.stdlib : alloca;
 import imageformats;
 
@@ -24,25 +25,25 @@ public bool detect_jpeg(Reader stream) {
 
 ///
 public IFImage read_jpeg(in char[] filename, long req_chans = 0) {
-    scope reader = new FileReader(filename);
+    auto reader = scoped!FileReader(filename);
     return read_jpeg(reader, req_chans);
 }
 
 ///
 public IFImage read_jpeg_from_mem(in ubyte[] source, long req_chans = 0) {
-    scope reader = new MemReader(source);
+    auto reader = scoped!MemReader(source);
     return read_jpeg(reader, req_chans);
 }
 
 ///
 public void read_jpeg_info(in char[] filename, out int w, out int h, out int chans) {
-    scope reader = new FileReader(filename);
+    auto reader = scoped!FileReader(filename);
     return read_jpeg_info(reader, w, h, chans);
 }
 
 ///
 public void read_jpeg_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
-    scope reader = new MemReader(source);
+    auto reader = scoped!MemReader(source);
     return read_jpeg_info(reader, w, h, chans);
 }
 

@@ -3,6 +3,7 @@ module imageformats.tga;
 import std.algorithm : min;
 import std.bitmanip  : littleEndianToNative, nativeToLittleEndian;
 import std.stdio     : File, SEEK_SET, SEEK_CUR;
+import std.typecons  : scoped;
 import imageformats;
 
 private:
@@ -36,51 +37,51 @@ public struct TGA_Header {
 
 ///
 public TGA_Header read_tga_header(in char[] filename) {
-    scope reader = new FileReader(filename);
+    auto reader = scoped!FileReader(filename);
     return read_tga_header(reader);
 }
 
 ///
 public TGA_Header read_tga_header_from_mem(in ubyte[] source) {
-    scope reader = new MemReader(source);
+    auto reader = scoped!MemReader(source);
     return read_tga_header(reader);
 }
 
 ///
 public IFImage read_tga(in char[] filename, long req_chans = 0) {
-    scope reader = new FileReader(filename);
+    auto reader = scoped!FileReader(filename);
     return read_tga(reader, req_chans);
 }
 
 ///
 public IFImage read_tga_from_mem(in ubyte[] source, long req_chans = 0) {
-    scope reader = new MemReader(source);
+    auto reader = scoped!MemReader(source);
     return read_tga(reader, req_chans);
 }
 
 ///
 public void write_tga(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
 {
-    scope writer = new FileWriter(file);
+    auto writer = scoped!FileWriter(file);
     write_tga(writer, w, h, data, tgt_chans);
 }
 
 ///
 public ubyte[] write_tga_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
-    scope writer = new MemWriter();
+    auto writer = scoped!MemWriter();
     write_tga(writer, w, h, data, tgt_chans);
     return writer.result;
 }
 
 ///
 public void read_tga_info(in char[] filename, out int w, out int h, out int chans) {
-    scope reader = new FileReader(filename);
+    auto reader = scoped!FileReader(filename);
     return read_tga_info(reader, w, h, chans);
 }
 
 ///
 public void read_tga_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
-    scope reader = new MemReader(source);
+    auto reader = scoped!MemReader(source);
     return read_tga_info(reader, w, h, chans);
 }
 

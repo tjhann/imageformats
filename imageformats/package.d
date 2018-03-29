@@ -1,9 +1,10 @@
-// Copyright (c) 2014 Tero Hänninen
+// Copyright (c) 2014-2018 Tero Hänninen
 // Boost Software License - Version 1.0 - August 17th, 2003
 module imageformats;
 
 import std.stdio  : File, SEEK_SET, SEEK_CUR, SEEK_END;
 import std.string : toLower, lastIndexOf;
+import std.typecons : scoped;
 public import imageformats.png;
 public import imageformats.tga;
 public import imageformats.bmp;
@@ -33,13 +34,13 @@ enum ColFmt {
 
 /// Reads an image from file.
 IFImage read_image(in char[] file, long req_chans = 0) {
-    scope reader = new FileReader(file);
+    auto reader = scoped!FileReader(file);
     return read_image_from_reader(reader, req_chans);
 }
 
 /// Reads an image in memory.
 IFImage read_image_from_mem(in ubyte[] source, long req_chans = 0) {
-    scope reader = new MemReader(source);
+    auto reader = scoped!MemReader(source);
     return read_image_from_reader(reader, req_chans);
 }
 
@@ -54,14 +55,14 @@ void write_image(in char[] file, long w, long h, in ubyte[] data, long req_chans
         case "bmp": write_image = &write_bmp; break;
         default: throw new ImageIOException("unknown image extension/type");
     }
-    scope writer = new FileWriter(file);
+    auto writer = scoped!FileWriter(file);
     write_image(writer, w, h, data, req_chans);
 }
 
 /// Returns basic info about an image.
 /// If number of channels is unknown chans is set to zero.
 void read_image_info(in char[] file, out int w, out int h, out int chans) {
-    scope reader = new FileReader(file);
+    auto reader = scoped!FileReader(file);
     try {
         return read_png_info(reader, w, h, chans);
     } catch (Throwable) {

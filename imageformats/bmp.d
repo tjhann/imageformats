@@ -3,6 +3,7 @@ module imageformats.bmp;
 import std.bitmanip : littleEndianToNative, nativeToLittleEndian;
 import std.stdio    : File, SEEK_SET;
 import std.math     : abs;
+import std.typecons : scoped;
 import imageformats;
 
 private:
@@ -25,25 +26,25 @@ public bool detect_bmp(Reader stream) {
 
 ///
 public IFImage read_bmp(in char[] filename, long req_chans = 0) {
-    scope reader = new FileReader(filename);
+    auto reader = scoped!FileReader(filename);
     return read_bmp(reader, req_chans);
 }
 
 ///
 public IFImage read_bmp_from_mem(in ubyte[] source, long req_chans = 0) {
-    scope reader = new MemReader(source);
+    auto reader = scoped!MemReader(source);
     return read_bmp(reader, req_chans);
 }
 
 ///
 public BMP_Header read_bmp_header(in char[] filename) {
-    scope reader = new FileReader(filename);
+    auto reader = scoped!FileReader(filename);
     return read_bmp_header(reader);
 }
 
 ///
 public BMP_Header read_bmp_header_from_mem(in ubyte[] source) {
-    scope reader = new MemReader(source);
+    auto reader = scoped!MemReader(source);
     return read_bmp_header(reader);
 }
 
@@ -99,26 +100,26 @@ public struct DibV5 {
 
 ///
 public void read_bmp_info(in char[] filename, out int w, out int h, out int chans) {
-    scope reader = new FileReader(filename);
+    auto reader = scoped!FileReader(filename);
     return read_bmp_info(reader, w, h, chans);
 }
 
 ///
 public void read_bmp_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
-    scope reader = new MemReader(source);
+    auto reader = scoped!MemReader(source);
     return read_bmp_info(reader, w, h, chans);
 }
 
 ///
 public void write_bmp(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
 {
-    scope writer = new FileWriter(file);
+    auto writer = scoped!FileWriter(file);
     write_bmp(writer, w, h, data, tgt_chans);
 }
 
 ///
 public ubyte[] write_bmp_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
-    scope writer = new MemWriter();
+    auto writer = scoped!MemWriter();
     write_bmp(writer, w, h, data, tgt_chans);
     return writer.result;
 }
