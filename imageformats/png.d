@@ -183,9 +183,9 @@ immutable ubyte[8] png_image_header =
 int channels(PNG_ColorType ct) pure nothrow {
     final switch (ct) with (PNG_ColorType) {
         case Y: return 1;
-        case RGB, Idx: return 3;
+        case RGB: return 3;
         case YA: return 2;
-        case RGBA: return 4;
+        case RGBA, Idx: return 4;
     }
 }
 
@@ -215,6 +215,7 @@ struct PNG_Decoder {
     ubyte[] read_buf;
     ubyte[] uc_buf;     // uncompressed
     ubyte[] palette;
+    ubyte[] transparency;
 }
 
 Buffer decode_png(ref PNG_Decoder dc) {
@@ -262,6 +263,22 @@ Buffer decode_png(ref PNG_Decoder dc) {
                 if (crc != dc.chunkmeta[0..4])
                     throw new ImageIOException("corrupt chunk");
                 stage = Stage.PLTE_parsed;
+                break;
+            case "tRNS":
+                if (! (stage == Stage.IHDR_parsed ||
+                      (stage == Stage.PLTE_parsed && dc.src_indexed)) )
+                    throw new ImageIOException("corrupt chunk stream");
+                ulong entries = dc.palette.length / 3;
+                if (len > entries)
+                    throw new ImageIOException("corrupt chunk");
+                dc.transparency = new ubyte[len];
+                dc.stream.readExact(dc.transparency, dc.transparency.length);
+                dc.stream.readExact(dc.chunkmeta, 12);
+                dc.crc.put(dc.transparency);
+                ubyte[4] crc = dc.crc.finish;
+                reverse(crc[]);
+                if (crc != dc.chunkmeta[0..4])
+                    throw new ImageIOException("corrupt chunk");
                 break;
             case "IEND":
                 if (stage != Stage.IDAT_parsed)
@@ -325,7 +342,7 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
 
     immutable size_t filter_step = dc.src_indexed ? 1 : dc.src_chans * ((dc.bpc == 8) ? 1 : 2);
 
-    ubyte[] depaletted = dc.src_indexed ? new ubyte[dc.w * 3] : null;
+    ubyte[] depaletted = dc.src_indexed ? new ubyte[dc.w * 4] : null;
 
     auto cline = new ubyte[dc.w * filter_step + 1]; // +1 for filter type byte
     auto pline = new ubyte[dc.w * filter_step + 1]; // +1 for filter type byte
@@ -350,7 +367,7 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
 
             ubyte[] bytes;  // defiltered bytes or 8-bit samples from palette
             if (dc.src_indexed) {
-                depalette(dc.palette, cline[1..$], depaletted);
+                depalette(dc.palette, dc.transparency, cline[1..$], depaletted);
                 bytes = depaletted[0 .. src_linelen];
             } else {
                 bytes = cline[1..$];
@@ -408,7 +425,7 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
 
                 ubyte[] bytes;  // defiltered bytes or 8-bit samples from palette
                 if (dc.src_indexed) {
-                    depalette(dc.palette, cln[1..$], depaletted);
+                    depalette(dc.palette, dc.transparency, cln[1..$], depaletted);
                     bytes = depaletted[0 .. src_linelen];
                 } else {
                     bytes = cln[1..$];
@@ -480,12 +497,14 @@ void line16_from_bytes(in ubyte[] src, int bpc, ushort[] tgt) {
     }
 }
 
-void depalette(in ubyte[] palette, in ubyte[] src_line, ubyte[] depaletted) pure {
-    for (size_t s, d;  s < src_line.length;  s+=1, d+=3) {
-        size_t pidx = src_line[s] * 3;
+void depalette(in ubyte[] palette, in ubyte[] transparency, in ubyte[] src_line, ubyte[] depaletted) pure {
+    for (size_t s, d;  s < src_line.length;  s+=1, d+=4) {
+        ubyte pid = src_line[s];
+        size_t pidx = pid * 3;
         if (palette.length < pidx + 3)
             throw new ImageIOException("palette index wrong");
         depaletted[d .. d+3] = palette[pidx .. pidx+3];
+        depaletted[d+3] = (pid < transparency.length) ? transparency[pid] : 255;
     }
 }
 
