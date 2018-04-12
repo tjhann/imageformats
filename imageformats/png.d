@@ -268,9 +268,11 @@ Buffer decode_png(ref PNG_Decoder dc) {
                 if (! (stage == Stage.IHDR_parsed ||
                       (stage == Stage.PLTE_parsed && dc.src_indexed)) )
                     throw new ImageIOException("corrupt chunk stream");
-                ulong entries = dc.palette.length / 3;
-                if (len > entries)
-                    throw new ImageIOException("corrupt chunk");
+                if (dc.src_indexed) {
+                    ulong entries = dc.palette.length / 3;
+                    if (len > entries)
+                        throw new ImageIOException("corrupt chunk");
+                }
                 dc.transparency = new ubyte[len];
                 dc.stream.readExact(dc.transparency, dc.transparency.length);
                 dc.stream.readExact(dc.chunkmeta, 12);
