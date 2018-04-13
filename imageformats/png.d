@@ -269,7 +269,7 @@ Buffer decode_png(ref PNG_Decoder dc) {
                       (stage == Stage.PLTE_parsed && dc.src_indexed)) )
                     throw new ImageIOException("corrupt chunk stream");
                 if (dc.src_indexed) {
-                    ulong entries = dc.palette.length / 3;
+                    size_t entries = dc.palette.length / 3;
                     if (len > entries)
                         throw new ImageIOException("corrupt chunk");
                 }
