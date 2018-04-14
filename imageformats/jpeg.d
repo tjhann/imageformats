@@ -11,6 +11,7 @@ import imageformats;
 
 private:
 
+/// Detects whether a JPEG image is readable from stream.
 public bool detect_jpeg(Reader stream) {
     try {
         int w, h, c;
@@ -23,25 +24,27 @@ public bool detect_jpeg(Reader stream) {
     }
 }
 
-///
+/// Reads a JPEG image. req_chans defines the format of returned image
+/// (you can use ColFmt here).
 public IFImage read_jpeg(in char[] filename, long req_chans = 0) {
     auto reader = scoped!FileReader(filename);
     return read_jpeg(reader, req_chans);
 }
 
-///
+/// Reads an image from a buffer containing a JPEG image. req_chans defines the
+/// format of returned image (you can use ColFmt here).
 public IFImage read_jpeg_from_mem(in ubyte[] source, long req_chans = 0) {
     auto reader = scoped!MemReader(source);
     return read_jpeg(reader, req_chans);
 }
 
-///
+/// Returns width, height and color format information via w, h and chans.
 public void read_jpeg_info(in char[] filename, out int w, out int h, out int chans) {
     auto reader = scoped!FileReader(filename);
     return read_jpeg_info(reader, w, h, chans);
 }
 
-///
+/// Returns width, height and color format information via w, h and chans.
 public void read_jpeg_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
     auto reader = scoped!MemReader(source);
     return read_jpeg_info(reader, w, h, chans);

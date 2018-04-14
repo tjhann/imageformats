@@ -10,41 +10,44 @@ public import imageformats.tga;
 public import imageformats.bmp;
 public import imageformats.jpeg;
 
-/// Image
+/// Image with 8-bit channels.
 struct IFImage {
     int         w, h;
     ColFmt      c;
     ubyte[]     pixels;
 }
 
-/// Image
+/// Image with 16-bit channels.
 struct IFImage16 {
     int         w, h;
     ColFmt      c;
     ushort[]    pixels;
 }
 
-/// Color format
+/// Color format which you can pass to the read and write functions.
 enum ColFmt {
-    Y = 1,
-    YA = 2,
-    RGB = 3,
-    RGBA = 4,
+    Y = 1,      /// Gray
+    YA = 2,     /// Gray + Alpha
+    RGB = 3,    /// Truecolor
+    RGBA = 4,   /// Truecolor + Alpha
 }
 
-/// Reads an image from file.
+/// Reads an image from file. req_chans defines the format of returned image
+/// (you can use ColFmt here).
 IFImage read_image(in char[] file, long req_chans = 0) {
     auto reader = scoped!FileReader(file);
     return read_image_from_reader(reader, req_chans);
 }
 
-/// Reads an image in memory.
+/// Reads an image from a buffer. req_chans defines the format of returned
+/// image (you can use ColFmt here).
 IFImage read_image_from_mem(in ubyte[] source, long req_chans = 0) {
     auto reader = scoped!MemReader(source);
     return read_image_from_reader(reader, req_chans);
 }
 
-/// Writes an image to file.
+/// Writes an image to file. req_chans defines the format the image is saved in
+/// (you can use ColFmt here).
 void write_image(in char[] file, long w, long h, in ubyte[] data, long req_chans = 0) {
     const char[] ext = extract_extension_lowercase(file);
 
@@ -59,8 +62,9 @@ void write_image(in char[] file, long w, long h, in ubyte[] data, long req_chans
     write_image(writer, w, h, data, req_chans);
 }
 
-/// Returns basic info about an image.
-/// If number of channels is unknown chans is set to zero.
+/// Returns width, height and color format information via w, h and chans.
+/// If number of channels is unknown chans is set to zero, otherwise chans
+/// values map to those of ColFmt.
 void read_image_info(in char[] file, out int w, out int h, out int chans) {
     auto reader = scoped!FileReader(file);
     try {
@@ -86,7 +90,7 @@ void read_image_info(in char[] file, out int w, out int h, out int chans) {
     throw new ImageIOException("unknown image type");
 }
 
-///
+/// Thrown from all the functions...
 class ImageIOException : Exception {
    @safe pure const
    this(string msg, string file = __FILE__, size_t line = __LINE__) {

@@ -10,6 +10,7 @@ private:
 
 immutable bmp_header = ['B', 'M'];
 
+/// Detects whether a BMP image is readable from stream.
 public bool detect_bmp(Reader stream) {
     try {
         ubyte[18] tmp = void;  // bmp header + size of dib header
@@ -24,31 +25,33 @@ public bool detect_bmp(Reader stream) {
     }
 }
 
-///
+/// Reads a BMP image. req_chans defines the format of returned image
+/// (you can use ColFmt here).
 public IFImage read_bmp(in char[] filename, long req_chans = 0) {
     auto reader = scoped!FileReader(filename);
     return read_bmp(reader, req_chans);
 }
 
-///
+/// Reads an image from a buffer containing a BMP image. req_chans defines the
+/// format of returned image (you can use ColFmt here).
 public IFImage read_bmp_from_mem(in ubyte[] source, long req_chans = 0) {
     auto reader = scoped!MemReader(source);
     return read_bmp(reader, req_chans);
 }
 
-///
+/// Returns the header of a BMP file.
 public BMP_Header read_bmp_header(in char[] filename) {
     auto reader = scoped!FileReader(filename);
     return read_bmp_header(reader);
 }
 
-///
+/// Reads the image header from a buffer containing a BMP image.
 public BMP_Header read_bmp_header_from_mem(in ubyte[] source) {
     auto reader = scoped!MemReader(source);
     return read_bmp_header(reader);
 }
 
-///
+/// Header of a BMP file.
 public struct BMP_Header {
     uint file_size;
     uint pixel_data_offset;
@@ -98,26 +101,26 @@ public struct DibV5 {
     uint icc_profile_size;
 }
 
-///
+/// Returns width, height and color format information via w, h and chans.
 public void read_bmp_info(in char[] filename, out int w, out int h, out int chans) {
     auto reader = scoped!FileReader(filename);
     return read_bmp_info(reader, w, h, chans);
 }
 
-///
+/// Returns width, height and color format information via w, h and chans.
 public void read_bmp_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
     auto reader = scoped!MemReader(source);
     return read_bmp_info(reader, w, h, chans);
 }
 
-///
+/// Writes a BMP image into a file.
 public void write_bmp(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
 {
     auto writer = scoped!FileWriter(file);
     write_bmp(writer, w, h, data, tgt_chans);
 }
 
-///
+/// Writes a BMP image into a buffer.
 public ubyte[] write_bmp_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
     auto writer = scoped!MemWriter();
     write_bmp(writer, w, h, data, tgt_chans);

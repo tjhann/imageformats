@@ -8,6 +8,7 @@ import imageformats;
 
 private:
 
+/// Detects whether a TGA image is readable from stream.
 public bool detect_tga(Reader stream) {
     try {
         auto hdr = read_tga_header(stream);
@@ -19,7 +20,7 @@ public bool detect_tga(Reader stream) {
     }
 }
 
-///
+/// Header of a TGA file.
 public struct TGA_Header {
    ubyte id_length;
    ubyte palette_type;
@@ -35,51 +36,53 @@ public struct TGA_Header {
    ubyte flags;
 }
 
-///
+/// Returns the header of a TGA file.
 public TGA_Header read_tga_header(in char[] filename) {
     auto reader = scoped!FileReader(filename);
     return read_tga_header(reader);
 }
 
-///
+/// Reads the image header from a buffer containing a TGA image.
 public TGA_Header read_tga_header_from_mem(in ubyte[] source) {
     auto reader = scoped!MemReader(source);
     return read_tga_header(reader);
 }
 
-///
+/// Reads a TGA image. req_chans defines the format of returned image
+/// (you can use ColFmt here).
 public IFImage read_tga(in char[] filename, long req_chans = 0) {
     auto reader = scoped!FileReader(filename);
     return read_tga(reader, req_chans);
 }
 
-///
+/// Reads an image from a buffer containing a TGA image. req_chans defines the
+/// format of returned image (you can use ColFmt here).
 public IFImage read_tga_from_mem(in ubyte[] source, long req_chans = 0) {
     auto reader = scoped!MemReader(source);
     return read_tga(reader, req_chans);
 }
 
-///
+/// Writes a TGA image into a file.
 public void write_tga(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
 {
     auto writer = scoped!FileWriter(file);
     write_tga(writer, w, h, data, tgt_chans);
 }
 
-///
+/// Writes a TGA image into a buffer.
 public ubyte[] write_tga_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
     auto writer = scoped!MemWriter();
     write_tga(writer, w, h, data, tgt_chans);
     return writer.result;
 }
 
-///
+/// Returns width, height and color format information via w, h and chans.
 public void read_tga_info(in char[] filename, out int w, out int h, out int chans) {
     auto reader = scoped!FileReader(filename);
     return read_tga_info(reader, w, h, chans);
 }
 
-///
+/// Returns width, height and color format information via w, h and chans.
 public void read_tga_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
     auto reader = scoped!MemReader(source);
     return read_tga_info(reader, w, h, chans);

@@ -10,6 +10,7 @@ import imageformats;
 
 private:
 
+/// Detects whether a PNG image is readable from stream.
 public bool detect_png(Reader stream) {
     try {
         ubyte[8] tmp = void;
@@ -22,7 +23,7 @@ public bool detect_png(Reader stream) {
     }
 }
 
-///
+/// Header of a PNG file.
 public struct PNG_Header {
     int     width;
     int     height;
@@ -33,63 +34,69 @@ public struct PNG_Header {
     ubyte   interlace_method;
 }
 
-///
+/// Returns the header of a PNG file.
 public PNG_Header read_png_header(in char[] filename) {
     auto reader = scoped!FileReader(filename);
     return read_png_header(reader);
 }
 
-///
+/// Returns the header of the image in the buffer.
 public PNG_Header read_png_header_from_mem(in ubyte[] source) {
     auto reader = scoped!MemReader(source);
     return read_png_header(reader);
 }
 
-///
+/// Reads an 8-bit or 16-bit PNG image and returns it as an 8-bit image.
+/// req_chans defines the format of returned image (you can use ColFmt here).
 public IFImage read_png(in char[] filename, long req_chans = 0) {
     auto reader = scoped!FileReader(filename);
     return read_png(reader, req_chans);
 }
 
-///
+/// Reads an 8-bit or 16-bit PNG image from a buffer and returns it as an
+/// 8-bit image.  req_chans defines the format of returned image (you can use
+/// ColFmt here).
 public IFImage read_png_from_mem(in ubyte[] source, long req_chans = 0) {
     auto reader = scoped!MemReader(source);
     return read_png(reader, req_chans);
 }
 
-///
+/// Reads an 8-bit or 16-bit PNG image and returns it as a 16-bit image.
+/// req_chans defines the format of returned image (you can use ColFmt here).
 public IFImage16 read_png16(in char[] filename, long req_chans = 0) {
     auto reader = scoped!FileReader(filename);
     return read_png16(reader, req_chans);
 }
 
-///
+/// Reads an 8-bit or 16-bit PNG image from a buffer and returns it as a
+/// 16-bit image.  req_chans defines the format of returned image (you can use
+/// ColFmt here).
 public IFImage16 read_png16_from_mem(in ubyte[] source, long req_chans = 0) {
     auto reader = scoped!MemReader(source);
     return read_png16(reader, req_chans);
 }
 
-///
+/// Writes a PNG image into a file.
 public void write_png(in char[] file, long w, long h, in ubyte[] data, long tgt_chans = 0)
 {
     auto writer = scoped!FileWriter(file);
     write_png(writer, w, h, data, tgt_chans);
 }
 
-///
+/// Writes a PNG image into a buffer.
 public ubyte[] write_png_to_mem(long w, long h, in ubyte[] data, long tgt_chans = 0) {
     auto writer = scoped!MemWriter();
     write_png(writer, w, h, data, tgt_chans);
     return writer.result;
 }
 
-///
+/// Returns width, height and color format information via w, h and chans.
 public void read_png_info(in char[] filename, out int w, out int h, out int chans) {
     auto reader = scoped!FileReader(filename);
     return read_png_info(reader, w, h, chans);
 }
 
-///
+/// Returns width, height and color format information via w, h and chans.
 public void read_png_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
     auto reader = scoped!MemReader(source);
     return read_png_info(reader, w, h, chans);
