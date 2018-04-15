@@ -10,19 +10,6 @@ import imageformats;
 
 private:
 
-/// Detects whether a PNG image is readable from stream.
-public bool detect_png(Reader stream) {
-    try {
-        ubyte[8] tmp = void;
-        stream.readExact(tmp, tmp.length);
-        return (tmp[0..8] == png_file_header[0..$]);
-    } catch (Throwable) {
-        return false;
-    } finally {
-        stream.seek(0, SEEK_SET);
-    }
-}
-
 /// Header of a PNG file.
 public struct PNG_Header {
     int     width;
@@ -100,6 +87,19 @@ public void read_png_info(in char[] filename, out int w, out int h, out int chan
 public void read_png_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
     auto reader = scoped!MemReader(source);
     return read_png_info(reader, w, h, chans);
+}
+
+// Detects whether a PNG image is readable from stream.
+package bool detect_png(Reader stream) {
+    try {
+        ubyte[8] tmp = void;
+        stream.readExact(tmp, tmp.length);
+        return (tmp[0..8] == png_file_header[0..$]);
+    } catch (Throwable) {
+        return false;
+    } finally {
+        stream.seek(0, SEEK_SET);
+    }
 }
 
 PNG_Header read_png_header(Reader stream) {

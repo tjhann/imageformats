@@ -11,19 +11,6 @@ import imageformats;
 
 private:
 
-/// Detects whether a JPEG image is readable from stream.
-public bool detect_jpeg(Reader stream) {
-    try {
-        int w, h, c;
-        read_jpeg_info(stream, w, h, c);
-        return true;
-    } catch (Throwable) {
-        return false;
-    } finally {
-        stream.seek(0, SEEK_SET);
-    }
-}
-
 /// Reads a JPEG image. req_chans defines the format of returned image
 /// (you can use ColFmt here).
 public IFImage read_jpeg(in char[] filename, long req_chans = 0) {
@@ -48,6 +35,19 @@ public void read_jpeg_info(in char[] filename, out int w, out int h, out int cha
 public void read_jpeg_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
     auto reader = scoped!MemReader(source);
     return read_jpeg_info(reader, w, h, chans);
+}
+
+// Detects whether a JPEG image is readable from stream.
+package bool detect_jpeg(Reader stream) {
+    try {
+        int w, h, c;
+        read_jpeg_info(stream, w, h, c);
+        return true;
+    } catch (Throwable) {
+        return false;
+    } finally {
+        stream.seek(0, SEEK_SET);
+    }
 }
 
 package IFImage read_jpeg(Reader stream, long req_chans = 0) {

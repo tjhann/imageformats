@@ -8,18 +8,6 @@ import imageformats;
 
 private:
 
-/// Detects whether a TGA image is readable from stream.
-public bool detect_tga(Reader stream) {
-    try {
-        auto hdr = read_tga_header(stream);
-        return true;
-    } catch (Throwable) {
-        return false;
-    } finally {
-        stream.seek(0, SEEK_SET);
-    }
-}
-
 /// Header of a TGA file.
 public struct TGA_Header {
    ubyte id_length;
@@ -86,6 +74,18 @@ public void read_tga_info(in char[] filename, out int w, out int h, out int chan
 public void read_tga_info_from_mem(in ubyte[] source, out int w, out int h, out int chans) {
     auto reader = scoped!MemReader(source);
     return read_tga_info(reader, w, h, chans);
+}
+
+// Detects whether a TGA image is readable from stream.
+package bool detect_tga(Reader stream) {
+    try {
+        auto hdr = read_tga_header(stream);
+        return true;
+    } catch (Throwable) {
+        return false;
+    } finally {
+        stream.seek(0, SEEK_SET);
+    }
 }
 
 TGA_Header read_tga_header(Reader stream) {

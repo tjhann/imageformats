@@ -10,21 +10,6 @@ private:
 
 immutable bmp_header = ['B', 'M'];
 
-/// Detects whether a BMP image is readable from stream.
-public bool detect_bmp(Reader stream) {
-    try {
-        ubyte[18] tmp = void;  // bmp header + size of dib header
-        stream.readExact(tmp, tmp.length);
-        size_t ds = littleEndianToNative!uint(tmp[14..18]);
-        return (tmp[0..2] == bmp_header
-            && (ds == 12 || ds == 40 || ds == 52 || ds == 56 || ds == 108 || ds == 124));
-    } catch (Throwable) {
-        return false;
-    } finally {
-        stream.seek(0, SEEK_SET);
-    }
-}
-
 /// Reads a BMP image. req_chans defines the format of returned image
 /// (you can use ColFmt here).
 public IFImage read_bmp(in char[] filename, long req_chans = 0) {
@@ -125,6 +110,21 @@ public ubyte[] write_bmp_to_mem(long w, long h, in ubyte[] data, long tgt_chans 
     auto writer = scoped!MemWriter();
     write_bmp(writer, w, h, data, tgt_chans);
     return writer.result;
+}
+
+// Detects whether a BMP image is readable from stream.
+package bool detect_bmp(Reader stream) {
+    try {
+        ubyte[18] tmp = void;  // bmp header + size of dib header
+        stream.readExact(tmp, tmp.length);
+        size_t ds = littleEndianToNative!uint(tmp[14..18]);
+        return (tmp[0..2] == bmp_header
+            && (ds == 12 || ds == 40 || ds == 52 || ds == 56 || ds == 108 || ds == 124));
+    } catch (Throwable) {
+        return false;
+    } finally {
+        stream.seek(0, SEEK_SET);
+    }
 }
 
 BMP_Header read_bmp_header(Reader stream) {
