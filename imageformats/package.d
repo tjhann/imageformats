@@ -12,15 +12,25 @@ public import imageformats.jpeg;
 
 /// Image with 8-bit channels.
 struct IFImage {
-    int         w, h;
+    /// width
+    int         w;
+    /// height
+    int         h;
+    /// channels
     ColFmt      c;
+    /// buffer
     ubyte[]     pixels;
 }
 
 /// Image with 16-bit channels.
 struct IFImage16 {
-    int         w, h;
+    /// width
+    int         w;
+    /// height
+    int         h;
+    /// channels
     ColFmt      c;
+    /// buffer
     ushort[]    pixels;
 }
 
