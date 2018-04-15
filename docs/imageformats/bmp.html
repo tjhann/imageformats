@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<link rel="stylesheet" type="text/css" href="../style.css"/>
+<script src="../highlight.pack.js"></script>
+<title>imageformats.bmp</title>
+<base href="../"/>
+<script src="search.js"></script>
+<script src="show_hide.js"></script>
+</head>
+<body>
+<div class="main">
+<div class="breadcrumbs">
+<table id="results"></table>
+<a href="index.html" class="home">⌂</a><input type="search" id="search" placeholder="Search" onkeyup="searchSubmit(this.value, event)"/>
+<small>imageformats.bmp</small>
+</div>
+<div class="sidebar">
+<a href="imageformats/bmp.html#hide-toc" class="hide" id="hide-toc">&#171;</a>
+<a href="imageformats/bmp.html#show-toc" class="show" id="show-toc">&#187;</a>
+<div id="toc-id" class="toc">
+<ul><li><span class="package" onclick="show_hide('imageformats');"><a href="imageformats.html">imageformats</a></span>
+<ul id="imageformats" style='display:block'>
+<li><span class=" selected">imageformats.<a href="imageformats/bmp.html">bmp</a></span>
+</li>
+<li>imageformats.<a href="imageformats/jpeg.html">jpeg</a></li>
+<li>imageformats.<a href="imageformats/png.html">png</a></li>
+<li>imageformats.<a href="imageformats/tga.html">tga</a></li>
+</ul>
+</li>
+
+</ul>
+</div></div>
+<div class="content">
+<div class="aggregate-symbol"><a class="anchor" id="detect_bmp"></a><div class="symbol"><div class="description"><pre><code>private <a href="http://dlang.org/type.html#basic-data-types">bool</a> <a href="imageformats/bmp.html#detect_bmp">detect_bmp</a>(Reader stream)
+</code></pre>
+<div class="section"><h2></h2>
+<p>Detects whether a BMP image is readable from stream.
+</p>
+
+
+</div>
+<div class="section"><h2></h2>
+
+
+</div>
+</div></div><a class="anchor" id="read_bmp"></a><div class="symbol"><div class="description"><pre><code>private <a href="imageformats/IFImage.html">IFImage</a> <a href="imageformats/bmp.html#read_bmp">read_bmp</a>(
+    in <a href="http://dlang.org/type.html#basic-data-types">char</a>[] filename, 
+    <a href="http://dlang.org/type.html#basic-data-types">long</a> req_chans = 0)
+</code></pre>
+<div class="section"><h2></h2>
+<p>Reads a BMP image. req_chans defines the format of returned image
+(you can use ColFmt here).
+</p>
+
+
+</div>
+<div class="section"><h2></h2>
+
+
+</div>
+</div></div><a class="anchor" id="read_bmp_from_mem"></a><div class="symbol"><div class="description"><pre><code>private <a href="imageformats/IFImage.html">IFImage</a> <a href="imageformats/bmp.html#read_bmp_from_mem">read_bmp_from_mem</a>(
+    in <a href="http://dlang.org/type.html#basic-data-types">ubyte</a>[] source, 
+    <a href="http://dlang.org/type.html#basic-data-types">long</a> req_chans = 0)
+</code></pre>
+<div class="section"><h2></h2>
+<p>Reads an image from a buffer containing a BMP image. req_chans defines the
+format of returned image (you can use ColFmt here).
+</p>
+
+
+</div>
+<div class="section"><h2></h2>
+
+
+</div>
+</div></div><a class="anchor" id="read_bmp_header"></a><div class="symbol"><div class="description"><pre><code>private <a href="imageformats/bmp/BMP_Header.html">BMP_Header</a> <a href="imageformats/bmp.html#read_bmp_header">read_bmp_header</a>(in <a href="http://dlang.org/type.html#basic-data-types">char</a>[] filename)
+</code></pre>
+<div class="section"><h2></h2>
+<p>Returns the header of a BMP file.
+</p>
+
+
+</div>
+<div class="section"><h2></h2>
+
+
+</div>
+</div></div><a class="anchor" id="read_bmp_header_from_mem"></a><div class="symbol"><div class="description"><pre><code>private <a href="imageformats/bmp/BMP_Header.html">BMP_Header</a> <a href="imageformats/bmp.html#read_bmp_header_from_mem">read_bmp_header_from_mem</a>(in <a href="http://dlang.org/type.html#basic-data-types">ubyte</a>[] source)
+</code></pre>
+<div class="section"><h2></h2>
+<p>Reads the image header from a buffer containing a BMP image.
+</p>
+
+
+</div>
+<div class="section"><h2></h2>
+
+
+</div>
+</div></div><a class="anchor" id="read_bmp_info"></a><div class="symbol"><div class="description"><pre><code>private <a href="http://dlang.org/type.html#basic-data-types">void</a> <a href="imageformats/bmp.html#read_bmp_info">read_bmp_info</a>(
+    in <a href="http://dlang.org/type.html#basic-data-types">char</a>[] filename, 
+    out <a href="http://dlang.org/type.html#basic-data-types">int</a> w, 
+    out <a href="http://dlang.org/type.html#basic-data-types">int</a> h, 
+    out <a href="http://dlang.org/type.html#basic-data-types">int</a> chans)
+</code></pre>
+<div class="section"><h2></h2>
+<p>Returns width, height and color format information via w, h and chans.
+</p>
+
+
+</div>
+<div class="section"><h2></h2>
+
+
+</div>
+</div></div><a class="anchor" id="read_bmp_info_from_mem"></a><div class="symbol"><div class="description"><pre><code>private <a href="http://dlang.org/type.html#basic-data-types">void</a> <a href="imageformats/bmp.html#read_bmp_info_from_mem">read_bmp_info_from_mem</a>(
+    in <a href="http://dlang.org/type.html#basic-data-types">ubyte</a>[] source, 
+    out <a href="http://dlang.org/type.html#basic-data-types">int</a> w, 
+    out <a href="http://dlang.org/type.html#basic-data-types">int</a> h, 
+    out <a href="http://dlang.org/type.html#basic-data-types">int</a> chans)
+</code></pre>
+<div class="section"><h2></h2>
+<p>Returns width, height and color format information via w, h and chans.
+</p>
+
+
+</div>
+<div class="section"><h2></h2>
+
+
+</div>
+</div></div><a class="anchor" id="write_bmp"></a><div class="symbol"><div class="description"><pre><code>private <a href="http://dlang.org/type.html#basic-data-types">void</a> <a href="imageformats/bmp.html#write_bmp">write_bmp</a>(
+    in <a href="http://dlang.org/type.html#basic-data-types">char</a>[] file, 
+    <a href="http://dlang.org/type.html#basic-data-types">long</a> w, 
+    <a href="http://dlang.org/type.html#basic-data-types">long</a> h, 
+    in <a href="http://dlang.org/type.html#basic-data-types">ubyte</a>[] data, 
+    <a href="http://dlang.org/type.html#basic-data-types">long</a> tgt_chans = 0)
+</code></pre>
+<div class="section"><h2></h2>
+<p>Writes a BMP image into a file.
+</p>
+
+
+</div>
+<div class="section"><h2></h2>
+
+
+</div>
+</div></div><a class="anchor" id="write_bmp_to_mem"></a><div class="symbol"><div class="description"><pre><code>private <a href="http://dlang.org/type.html#basic-data-types">ubyte</a>[] <a href="imageformats/bmp.html#write_bmp_to_mem">write_bmp_to_mem</a>(
+    <a href="http://dlang.org/type.html#basic-data-types">long</a> w, 
+    <a href="http://dlang.org/type.html#basic-data-types">long</a> h, 
+    in <a href="http://dlang.org/type.html#basic-data-types">ubyte</a>[] data, 
+    <a href="http://dlang.org/type.html#basic-data-types">long</a> tgt_chans = 0)
+</code></pre>
+<div class="section"><h2></h2>
+<p>Writes a BMP image into a buffer.
+</p>
+
+
+</div>
+<div class="section"><h2></h2>
+
+
+</div>
+</div></div><div class="description"></div><div class="section members"><h2>Functions</h2><table><tr><td><a href="imageformats/bmp.html#detect_bmp">detect_bmp</a><span class="extrainfo"></span></td><td></td><td></td></tr><tr><td><a href="imageformats/bmp.html#read_bmp">read_bmp</a><span class="extrainfo"></span></td><td></td><td></td></tr><tr><td><a href="imageformats/bmp.html#read_bmp_from_mem">read_bmp_from_mem</a><span class="extrainfo"></span></td><td></td><td></td></tr><tr><td><a href="imageformats/bmp.html#read_bmp_header">read_bmp_header</a><span class="extrainfo"></span></td><td></td><td></td></tr><tr><td><a href="imageformats/bmp.html#read_bmp_header_from_mem">read_bmp_header_from_mem</a><span class="extrainfo"></span></td><td></td><td></td></tr><tr><td><a href="imageformats/bmp.html#read_bmp_info">read_bmp_info</a><span class="extrainfo"></span></td><td></td><td></td></tr><tr><td><a href="imageformats/bmp.html#read_bmp_info_from_mem">read_bmp_info_from_mem</a><span class="extrainfo"></span></td><td></td><td></td></tr><tr><td><a href="imageformats/bmp.html#write_bmp">write_bmp</a><span class="extrainfo"></span></td><td></td><td></td></tr><tr><td><a href="imageformats/bmp.html#write_bmp_to_mem">write_bmp_to_mem</a><span class="extrainfo"></span></td><td></td><td></td></tr></table><h2>Structs</h2><table><tr><td><a href="imageformats/bmp/BMP_Header.html">BMP_Header</a></td><td></td><td></td></tr><tr><td><a href="imageformats/bmp/DibV1.html">DibV1</a></td><td></td><td></td></tr><tr><td><a href="imageformats/bmp/DibV2.html">DibV2</a></td><td></td><td></td></tr><tr><td><a href="imageformats/bmp/DibV4.html">DibV4</a></td><td></td><td></td></tr><tr><td><a href="imageformats/bmp/DibV5.html">DibV5</a></td><td></td><td></td></tr></table>
+</div>
+</div><script>hljs.initHighlightingOnLoad();</script>
+
+</div>
+<footer>
+Generated with <a href="https://github.com/kiith-sa/harbored-mod">harbored-mod</a>
+</footer>
+</div>
+</body>
+</html>

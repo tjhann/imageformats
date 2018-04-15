@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<link rel="stylesheet" type="text/css" href="style.css"/>
+<script src="highlight.pack.js"></script>
+<title>imageformats</title>
+<base href=""/>
+<script src="search.js"></script>
+<script src="show_hide.js"></script>
+</head>
+<body>
+<div class="main">
+<div class="breadcrumbs">
+<table id="results"></table>
+<a href="index.html" class="home">⌂</a><input type="search" id="search" placeholder="Search" onkeyup="searchSubmit(this.value, event)"/>
+<small>imageformats</small>
+</div>
+<div class="sidebar">
+<a href="imageformats.html#hide-toc" class="hide" id="hide-toc">&#171;</a>
+<a href="imageformats.html#show-toc" class="show" id="show-toc">&#187;</a>
+<div id="toc-id" class="toc">
+<ul><li><span class="package selected" onclick="show_hide('imageformats');"><a href="imageformats.html">imageformats</a></span>
+<ul id="imageformats" style='display:block'>
+<li>imageformats.<a href="imageformats/bmp.html">bmp</a></li>
+<li>imageformats.<a href="imageformats/jpeg.html">jpeg</a></li>
+<li>imageformats.<a href="imageformats/png.html">png</a></li>
+<li>imageformats.<a href="imageformats/tga.html">tga</a></li>
+</ul>
+</li>
+
+</ul>
+</div></div>
+<div class="content">
+<div class="aggregate-symbol"><a class="anchor" id="read_image"></a><div class="symbol"><div class="description"><pre><code>public <a href="imageformats/IFImage.html">IFImage</a> <a href="imageformats.html#read_image">read_image</a>(
+    in <a href="http://dlang.org/type.html#basic-data-types">char</a>[] file, 
+    <a href="http://dlang.org/type.html#basic-data-types">long</a> req_chans = 0)
+</code></pre>
+<div class="section"><h2></h2>
+<p>Reads an image from file. req_chans defines the format of returned image
+(you can use ColFmt here).
+</p>
+
+
+</div>
+<div class="section"><h2></h2>
+
+
+</div>
+</div></div><a class="anchor" id="read_image_from_mem"></a><div class="symbol"><div class="description"><pre><code>public <a href="imageformats/IFImage.html">IFImage</a> <a href="imageformats.html#read_image_from_mem">read_image_from_mem</a>(
+    in <a href="http://dlang.org/type.html#basic-data-types">ubyte</a>[] source, 
+    <a href="http://dlang.org/type.html#basic-data-types">long</a> req_chans = 0)
+</code></pre>
+<div class="section"><h2></h2>
+<p>Reads an image from a buffer. req_chans defines the format of returned
+image (you can use ColFmt here).
+</p>
+
+
+</div>
+<div class="section"><h2></h2>
+
+
+</div>
+</div></div><a class="anchor" id="write_image"></a><div class="symbol"><div class="description"><pre><code>public <a href="http://dlang.org/type.html#basic-data-types">void</a> <a href="imageformats.html#write_image">write_image</a>(
+    in <a href="http://dlang.org/type.html#basic-data-types">char</a>[] file, 
+    <a href="http://dlang.org/type.html#basic-data-types">long</a> w, 
+    <a href="http://dlang.org/type.html#basic-data-types">long</a> h, 
+    in <a href="http://dlang.org/type.html#basic-data-types">ubyte</a>[] data, 
+    <a href="http://dlang.org/type.html#basic-data-types">long</a> req_chans = 0)
+</code></pre>
+<div class="section"><h2></h2>
+<p>Writes an image to file. req_chans defines the format the image is saved in
+(you can use ColFmt here).
+</p>
+
+
+</div>
+<div class="section"><h2></h2>
+
+
+</div>
+</div></div><a class="anchor" id="read_image_info"></a><div class="symbol"><div class="description"><pre><code>public <a href="http://dlang.org/type.html#basic-data-types">void</a> <a href="imageformats.html#read_image_info">read_image_info</a>(
+    in <a href="http://dlang.org/type.html#basic-data-types">char</a>[] file, 
+    out <a href="http://dlang.org/type.html#basic-data-types">int</a> w, 
+    out <a href="http://dlang.org/type.html#basic-data-types">int</a> h, 
+    out <a href="http://dlang.org/type.html#basic-data-types">int</a> chans)
+</code></pre>
+<div class="section"><h2></h2>
+<p>Returns width, height and color format information via w, h and chans.
+If number of channels is unknown chans is set to zero, otherwise chans
+values map to those of ColFmt.
+</p>
+
+
+</div>
+<div class="section"><h2></h2>
+
+
+</div>
+</div></div><div class="description"><div class="section imports"><h2>Public imports</h2><ul><li><a href="imageformats/png.html">imageformats.png</a></li><li><a href="imageformats/tga.html">imageformats.tga</a></li><li><a href="imageformats/bmp.html">imageformats.bmp</a></li><li><a href="imageformats/jpeg.html">imageformats.jpeg</a></li>
+</ul>
+
+</div>
+</div><div class="section members"><h2>Enums</h2><table><tr><td><a href="imageformats/ColFmt.html">ColFmt</a></td><td></td><td></td></tr></table><h2>Functions</h2><table><tr><td><a href="imageformats.html#read_image">read_image</a><span class="extrainfo"></span></td><td></td><td></td></tr><tr><td><a href="imageformats.html#read_image_from_mem">read_image_from_mem</a><span class="extrainfo"></span></td><td></td><td></td></tr><tr><td><a href="imageformats.html#write_image">write_image</a><span class="extrainfo"></span></td><td></td><td></td></tr><tr><td><a href="imageformats.html#read_image_info">read_image_info</a><span class="extrainfo"></span></td><td></td><td></td></tr></table><h2>Structs</h2><table><tr><td><a href="imageformats/IFImage.html">IFImage</a></td><td></td><td></td></tr><tr><td><a href="imageformats/IFImage16.html">IFImage16</a></td><td></td><td></td></tr></table><h2>Classes</h2><table><tr><td><a href="imageformats/ImageIOException.html">ImageIOException</a></td><td></td><td></td></tr></table>
+</div>
+</div><script>hljs.initHighlightingOnLoad();</script>
+
+</div>
+<footer>
+Generated with <a href="https://github.com/kiith-sa/harbored-mod">harbored-mod</a>
+</footer>
+</div>
+</body>
+</html>
