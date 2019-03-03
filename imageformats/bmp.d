@@ -271,7 +271,7 @@ package IFImage read_bmp(Reader stream, long req_chans = 0) {
         pe_bytes_pp = 4;
     }
 
-    size_t mask_to_idx(uint mask) {
+    static size_t mask_to_idx(in uint mask) {
         switch (mask) {
             case 0xff00_0000: return 3;
             case 0x00ff_0000: return 2;
