@@ -177,7 +177,7 @@ void read_markers(ref JPEG_Decoder dc) {
                 break;
             case DRI: dc.read_restart_interval(); break;
             case EOI: dc.eoi_reached = true; break;
-            case APP0: .. case APPf: goto case;
+            case APP0: .. case APPf:
             case COM:
                 debug(DebugJPEG) writefln("-> skipping segment");
                 ubyte[2] lenbuf = void;
@@ -1032,9 +1032,8 @@ package void read_jpeg_info(Reader stream, out int w, out int h, out int chans) 
         while (marker[1] == 0xff)
             stream.readExact(marker[1..$], 1);
 
-        enum SKIP = 0xff;
         switch (marker[1]) with (Marker) {
-            case SOF0: .. case SOF3: goto case;
+            case SOF0: .. case SOF3:
             case SOF9: .. case SOF11:
                 ubyte[8] tmp;
                 stream.readExact(tmp[0..8], 8);
@@ -1044,9 +1043,8 @@ package void read_jpeg_info(Reader stream, out int w, out int h, out int chans) 
                 chans = tmp[7];
                 return;
             case SOS, EOI: throw new ImageIOException("no frame header");
-            case DRI, DHT, DQT, COM: goto case SKIP;
-            case APP0: .. case APPf: goto case SKIP;
-            case SKIP:
+            case DRI, DHT, DQT, COM:
+            case APP0: .. case APPf:
                 ubyte[2] lenbuf = void;
                 stream.readExact(lenbuf, 2);
                 int skiplen = bigEndianToNative!ushort(lenbuf) - 2;
