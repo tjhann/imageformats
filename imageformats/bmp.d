@@ -237,12 +237,14 @@ package IFImage read_bmp(Reader stream, long req_chans = 0) {
 
     BMP_Header hdr = read_bmp_header(stream);
 
-    if (hdr.width < 1 || hdr.height == 0) { throw new ImageIOException("invalid dimensions"); }
+    if (hdr.width < 1 || hdr.height == 0)
+        throw new ImageIOException("invalid dimensions");
     if (hdr.pixel_data_offset < (14 + hdr.dib_size)
-    || hdr.pixel_data_offset > 0xffffff /* arbitrary */) {
+     || hdr.pixel_data_offset > 0xffffff /* arbitrary */) {
         throw new ImageIOException("invalid pixel data offset");
     }
-    if (hdr.planes != 1) { throw new ImageIOException("not supported"); }
+    if (hdr.planes != 1)
+        throw new ImageIOException("not supported");
 
     auto bytes_pp       = 1;
     bool paletted       = true;
@@ -309,32 +311,31 @@ package IFImage read_bmp(Reader stream, long req_chans = 0) {
 
     stream.seek(hdr.pixel_data_offset, SEEK_SET);
 
-    immutable tgt_chans = (0 < req_chans) ? req_chans
-                                          : (alpha_masked) ? _ColFmt.RGBA
-                                                           : _ColFmt.RGB;
+    const tgt_chans = (0 < req_chans) ? req_chans
+                                      : (alpha_masked) ? _ColFmt.RGBA
+                                                       : _ColFmt.RGB;
 
     const src_fmt = (!paletted || pe_bytes_pp == 4) ? _ColFmt.BGRA : _ColFmt.BGR;
     const LineConv!ubyte convert = get_converter!ubyte(src_fmt, tgt_chans);
 
-    immutable size_t src_linesize = hdr.width * bytes_pp;  // without padding
-    immutable size_t src_pad = 3 - ((src_linesize-1) % 4);
-    immutable ptrdiff_t tgt_linesize = (hdr.width * cast(int) tgt_chans);
+    const size_t src_linesize = hdr.width * bytes_pp;  // without padding
+    const size_t src_pad = 3 - ((src_linesize-1) % 4);
+    const ptrdiff_t tgt_linesize = (hdr.width * cast(int) tgt_chans);
 
-    immutable ptrdiff_t tgt_stride = (hdr.height < 0) ? tgt_linesize : -tgt_linesize;
-    ptrdiff_t ti                   = (hdr.height < 0) ? 0 : (hdr.height-1) * tgt_linesize;
+    const ptrdiff_t tgt_stride = (hdr.height < 0) ? tgt_linesize : -tgt_linesize;
+    ptrdiff_t ti               = (hdr.height < 0) ? 0 : (hdr.height-1) * tgt_linesize;
 
-    auto src_line_buf  = new ubyte[src_linesize + src_pad];
+    auto src_line      = new ubyte[src_linesize + src_pad];
     auto bgra_line_buf = (paletted) ? null : new ubyte[hdr.width * 4];
     auto result        = new ubyte[hdr.width * abs(hdr.height) * cast(int) tgt_chans];
 
     foreach (_; 0 .. abs(hdr.height)) {
-        stream.readExact(src_line_buf[], src_line_buf.length);
-        auto src_line = src_line_buf[0..src_linesize];
+        stream.readExact(src_line[], src_line.length);
 
         if (paletted) {
-            size_t ps = pe_bytes_pp;
+            const size_t ps = pe_bytes_pp;
             size_t di = 0;
-            foreach (idx; src_line[]) {
+            foreach (idx; src_line[0..src_linesize]) {
                 if (idx > palette_length)
                     throw new ImageIOException("invalid palette index");
                 size_t i = idx * ps;
@@ -344,16 +345,16 @@ package IFImage read_bmp(Reader stream, long req_chans = 0) {
                 }
                 di += ps;
             }
-            convert(depaletted_line[], result[ti .. (ti+tgt_linesize)]);
+            convert(depaletted_line[], result[ti .. ti + tgt_linesize]);
         } else {
-            for (size_t si, di;   si < src_line.length;   si+=bytes_pp, di+=4) {
+            for (size_t si, di;   si < src_linesize;   si+=bytes_pp, di+=4) {
                 bgra_line_buf[di + 0] = src_line[si + bluei];
                 bgra_line_buf[di + 1] = src_line[si + greeni];
                 bgra_line_buf[di + 2] = src_line[si + redi];
                 bgra_line_buf[di + 3] = (alpha_masked) ? src_line[si + alphai]
                                                        : 255;
             }
-            convert(bgra_line_buf[], result[ti .. (ti+tgt_linesize)]);
+            convert(bgra_line_buf[], result[ti .. ti + tgt_linesize]);
         }
 
         ti += tgt_stride;
@@ -420,8 +421,7 @@ void write_bmp(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 
     if (tgt_chans == 3) {
         hdr[54..70] = 0;    // dib v2 and v3
     } else {
-        static immutable ubyte[16] b = 
-        [
+        static immutable ubyte[16] b = [
             0, 0, 0xff, 0,
             0, 0xff, 0, 0,
             0xff, 0, 0, 0,

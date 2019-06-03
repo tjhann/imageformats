@@ -449,9 +449,7 @@ unittest {
         assert(a.w == b.w && a.w == c.w);
         assert(a.h == b.h && a.h == c.h);
         assert(a.pixels.length == b.pixels.length && a.pixels.length == c.pixels.length);
-        foreach (i; 0 .. a.pixels.length) {
-            assert(a.pixels[i] == b.pixels[i], "png/tga");
-            assert(a.pixels[i] == c.pixels[i], "png/bmp");
-        }
+        assert(a.pixels[0..$] == b.pixels[0..$], "png/tga");
+        assert(a.pixels[0..$] == c.pixels[0..$], "png/bmp");
     }
 }

@@ -135,29 +135,22 @@ package IFImage read_tga(Reader stream, long req_chans = 0) {
     if (hdr.palette_type)
         throw new ImageIOException("paletted TGAs not supported");
 
-    bool rle = false;
+    const bool rle = hdr.data_type == TGA_DataType.TrueColor_RLE    //   Idx_RLE
+                  || hdr.data_type == TGA_DataType.Gray_RLE;        // not supported
+
     switch (hdr.data_type) with (TGA_DataType) {
-        //case 1: ;   // paletted, uncompressed
         case TrueColor:
-            if (! (hdr.bits_pp == 24 || hdr.bits_pp == 32))
+        case TrueColor_RLE:
+            if (hdr.bits_pp != 24 && hdr.bits_pp != 32)
                 throw new ImageIOException("not supported");
             break;
         case Gray:
-            if (! (hdr.bits_pp == 8 || (hdr.bits_pp == 16 && attr_bits_pp == 8)))
-                throw new ImageIOException("not supported");
-            break;
-        //case 9: ;   // paletted, RLE
-        case TrueColor_RLE:
-            if (! (hdr.bits_pp == 24 || hdr.bits_pp == 32))
-                throw new ImageIOException("not supported");
-            rle = true;
-            break;
         case Gray_RLE:
-            if (! (hdr.bits_pp == 8 || (hdr.bits_pp == 16 && attr_bits_pp == 8)))
+            if (hdr.bits_pp != 8 && !(hdr.bits_pp == 16 && attr_bits_pp == 8))
                 throw new ImageIOException("not supported");
-            rle = true;
             break;
-        default: throw new ImageIOException("data type not supported");
+        default:
+            throw new ImageIOException("not supported");
     }
 
     int src_chans = hdr.bits_pp / 8;
@@ -228,12 +221,12 @@ struct TGA_Decoder {
 ubyte[] decode_tga(ref TGA_Decoder dc) {
     auto result = new ubyte[dc.w * dc.h * dc.tgt_chans];
 
-    immutable size_t tgt_linesize = dc.w * dc.tgt_chans;
-    immutable size_t src_linesize = dc.w * dc.bytes_pp;
+    const size_t tgt_linesize = dc.w * dc.tgt_chans;
+    const size_t src_linesize = dc.w * dc.bytes_pp;
     auto src_line = new ubyte[src_linesize];
 
-    immutable ptrdiff_t tgt_stride = (dc.origin_at_top) ? tgt_linesize : -tgt_linesize;
-    ptrdiff_t ti                   = (dc.origin_at_top) ? 0 : (dc.h-1) * tgt_linesize;
+    const ptrdiff_t tgt_stride = (dc.origin_at_top) ? tgt_linesize : -tgt_linesize;
+    ptrdiff_t ti               = (dc.origin_at_top) ? 0 : (dc.h-1) * tgt_linesize;
 
     const LineConv!ubyte convert = get_converter!ubyte(dc.src_fmt, dc.tgt_chans);
 
@@ -248,7 +241,7 @@ ubyte[] decode_tga(ref TGA_Decoder dc) {
 
     // ----- RLE  -----
 
-    auto rbuf = new ubyte[src_linesize];
+    ubyte[4] rbuf;
     size_t plen = 0;      // packet length
     bool its_rle = false;
 
@@ -341,8 +334,8 @@ void write_image_data(ref TGA_Encoder ec) {
 
     const LineConv!ubyte convert = get_converter!ubyte(ec.src_chans, tgt_fmt);
 
-    immutable size_t src_linesize = ec.w * ec.src_chans;
-    immutable size_t tgt_linesize = ec.w * ec.tgt_chans;
+    const size_t src_linesize = ec.w * ec.src_chans;
+    const size_t tgt_linesize = ec.w * ec.tgt_chans;
     auto tgt_line = new ubyte[tgt_linesize];
 
     ptrdiff_t si = (ec.h-1) * src_linesize;     // origin at bottom
@@ -356,10 +349,10 @@ void write_image_data(ref TGA_Encoder ec) {
         return;
     }
 
-    // ----- RLE  -----
+    // ----- RLE -----
 
-    immutable bytes_pp = ec.tgt_chans;
-    immutable size_t max_packets_per_line = (tgt_linesize+127) / 128;
+    const bytes_pp = ec.tgt_chans;
+    const size_t max_packets_per_line = (tgt_linesize+127) / 128;
     auto tgt_cmp = new ubyte[tgt_linesize + max_packets_per_line];  // compressed line
     foreach (_; 0 .. ec.h) {
         convert(ec.data[si .. si + src_linesize], tgt_line);
@@ -369,8 +362,9 @@ void write_image_data(ref TGA_Encoder ec) {
     }
 }
 
-ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in size_t w, in int bytes_pp) pure {
-    immutable int rle_limit = (1 < bytes_pp) ? 2 : 3;  // run len worth an RLE packet
+ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in size_t w, in int bytes_pp)
+{
+    const int rle_limit = (1 < bytes_pp) ? 2 : 3;  // run len worth an RLE packet
     size_t runlen = 0;
     size_t rawlen = 0;
     size_t raw_i = 0; // start of raw packet data in line

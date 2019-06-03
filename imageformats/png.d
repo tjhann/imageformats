@@ -349,7 +349,8 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
 
     bool metaready = false;     // chunk len, type, crc
 
-    immutable size_t filter_step = dc.src_indexed ? 1 : dc.src_chans * ((dc.bpc == 8) ? 1 : 2);
+    const size_t filter_step = dc.src_indexed
+                             ? 1 : dc.src_chans * ((dc.bpc == 8) ? 1 : 2);
 
     ubyte[] depaletted = dc.src_indexed ? new ubyte[dc.w * 4] : null;
 
@@ -364,8 +365,8 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
     const LineConv!ushort convert16 = get_converter!ushort(dc.src_chans, dc.tgt_chans);
 
     if (dc.ilace == InterlaceMethod.None) {
-        immutable size_t src_linelen = dc.w * dc.src_chans;
-        immutable size_t tgt_linelen = dc.w * dc.tgt_chans;
+        const size_t src_linelen = dc.w * dc.src_chans;
+        const size_t tgt_linelen = dc.w * dc.tgt_chans;
 
         size_t ti = 0;    // target index
         foreach (j; 0 .. dc.h) {
@@ -699,14 +700,14 @@ void write_png(ref PNG_Encoder ec) {
 }
 
 void write_IDATs(ref PNG_Encoder ec) {
-    immutable long max_idatlen = 4 * 4096;
+    const int max_idatlen = 4 * 4096;
     ec.writelen = 0;
     ec.chunk_buf = new ubyte[8 + max_idatlen + 4];
     ec.data_buf = ec.chunk_buf[8 .. 8 + max_idatlen];
     static immutable ubyte[4] IDAT = ['I','D','A','T'];
     ec.chunk_buf[4 .. 8] = IDAT;
 
-    immutable size_t linesize = ec.w * ec.tgt_chans + 1; // +1 for filter type
+    const size_t linesize = ec.w * ec.tgt_chans + 1; // +1 for filter type
     ubyte[] cline = new ubyte[linesize];
     ubyte[] pline = new ubyte[linesize];    // initialized to 0
 
@@ -715,8 +716,8 @@ void write_IDATs(ref PNG_Encoder ec) {
 
     const LineConv!ubyte convert = get_converter!ubyte(ec.src_chans, ec.tgt_chans);
 
-    immutable size_t filter_step = ec.tgt_chans;   // step between pixels, in bytes
-    immutable size_t src_linesize = ec.w * ec.src_chans;
+    const size_t filter_step = ec.tgt_chans;   // step between pixels, in bytes
+    const size_t src_linesize = ec.w * ec.src_chans;
 
     size_t si = 0;
     foreach (j; 0 .. ec.h) {
