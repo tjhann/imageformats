@@ -3,6 +3,7 @@
 - [Docs](https://lgvz.github.io/imageformats/)
 - Returned image data is 8-bit except PNG can also return 16-bit.
 - Image data can be converted to Y, YA, RGB or RGBA.
+- There's a @nogc remake: [imagefmt](https://github.com/lgvz/dimagefmt)
 
 | Format | Decoder            | Encoder                           |
 | ---    | ---                | ---                               |
@@ -31,3 +32,5 @@ void main() {
     write_tga("porkkana.tga", i3.w, i3.h, i3.pixels);
 }
 ```
+
+**Tipjar**: `nano_1xeof5x1ukki4awa7fp9gyb3qsymmrr4s3i8o63okzdq3bhsdj56nefm9shs`

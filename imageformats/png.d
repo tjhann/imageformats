@@ -184,7 +184,7 @@ PNG_Decoder init_png_decoder(Reader stream, long req_chans, int req_bpc) {
 immutable ubyte[8] png_file_header =
     [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
-immutable ubyte[8] png_image_header = 
+immutable ubyte[8] png_image_header =
     [0x0, 0x0, 0x0, 0xd, 'I','H','D','R'];
 
 int channels(PNG_ColorType ct) pure nothrow {
@@ -350,7 +350,7 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
     bool metaready = false;     // chunk len, type, crc
 
     const size_t filter_step = dc.src_indexed
-                             ? 1 : dc.src_chans * ((dc.bpc == 8) ? 1 : 2);
+                             ? 1 : dc.src_chans * (dc.bpc == 8 ? 1 : 2);
 
     ubyte[] depaletted = dc.src_indexed ? new ubyte[dc.w * 4] : null;
 
@@ -539,24 +539,22 @@ pure nothrow {
   size_t a7_red7_to_dst(size_t redx, size_t redy, size_t dstw) { return (redy*2+1)*dstw + redx;   }
 }
 
-void uncompress_line(ref PNG_Decoder dc, ref int length, ref bool metaready, ubyte[] dst) {
+void uncompress_line(ref PNG_Decoder dc, ref int avail, ref bool metaready, ubyte[] dst)
+{
     size_t readysize = min(dst.length, dc.uc_buf.length);
     dst[0 .. readysize] = dc.uc_buf[0 .. readysize];
     dc.uc_buf = dc.uc_buf[readysize .. $];
 
-    if (readysize == dst.length)
-        return;
-
     while (readysize != dst.length) {
         // need new data for dc.uc_buf...
-        if (length <= 0) {  // IDAT is read -> read next chunks meta
+        if (avail <= 0) {  // IDAT is read -> read next chunks meta
             dc.stream.readExact(dc.chunkmeta, 12);   // crc | len & type
             ubyte[4] crc = dc.crc.finish;
             reverse(crc[]);
             if (crc != dc.chunkmeta[0..4])
                 throw new ImageIOException("corrupt chunk");
 
-            length = bigEndianToNative!int(dc.chunkmeta[4..8]);
+            avail = bigEndianToNative!int(dc.chunkmeta[4..8]);
             if (dc.chunkmeta[8..12] != "IDAT") {
                 // no new IDAT chunk so flush, this is the end of the IDAT stream
                 metaready = true;
@@ -568,14 +566,14 @@ void uncompress_line(ref PNG_Decoder dc, ref int length, ref bool metaready, uby
                 dc.uc_buf = dc.uc_buf[part2 .. $];
                 return;
             }
-            if (length <= 0)    // empty IDAT chunk
+            if (avail <= 0)    // empty IDAT chunk
                 throw new ImageIOException("not enough data");
             dc.crc.put(dc.chunkmeta[8..12]);  // type
         }
 
-        size_t bytes = min(length, dc.read_buf.length);
+        size_t bytes = min(avail, dc.read_buf.length);
         dc.stream.readExact(dc.read_buf, bytes);
-        length -= bytes;
+        avail -= bytes;
         dc.crc.put(dc.read_buf[0..bytes]);
 
         if (bytes <= 0)
@@ -621,9 +619,9 @@ void recon(ubyte[] cline, in ubyte[] pline, ubyte ftype, size_t fstep) pure {
 }
 
 ubyte paeth(ubyte a, ubyte b, ubyte c) pure nothrow {
-    int pc = cast(int) c;
-    int pa = cast(int) b - pc;
-    int pb = cast(int) a - pc;
+    int pc = c;
+    int pa = b - pc;
+    int pb = a - pc;
     pc = pa + pb;
     if (pa < 0) pa = -pa;
     if (pb < 0) pb = -pb;

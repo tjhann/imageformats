@@ -6,7 +6,6 @@ import std.math         : ceil;
 import std.bitmanip     : bigEndianToNative;
 import std.stdio        : File, SEEK_SET, SEEK_CUR;
 import std.typecons     : scoped;
-import core.stdc.stdlib : alloca;
 import imageformats;
 
 private:
@@ -50,6 +49,46 @@ package bool detect_jpeg(Reader stream) {
     }
 }
 
+package void read_jpeg_info(Reader stream, out int w, out int h, out int chans) {
+    ubyte[2] marker = void;
+    stream.readExact(marker, 2);
+
+    // SOI
+    if (marker[0] != 0xff || marker[1] != Marker.SOI)
+        throw new ImageIOException("not JPEG");
+
+    while (true) {
+        stream.readExact(marker, 2);
+
+        if (marker[0] != 0xff)
+            throw new ImageIOException("no frame header");
+        while (marker[1] == 0xff)
+            stream.readExact(marker[1..$], 1);
+
+        switch (marker[1]) with (Marker) {
+            case SOF0: .. case SOF3:
+            case SOF9: .. case SOF11:
+                ubyte[8] tmp;
+                stream.readExact(tmp[0..8], 8);
+                //int len = bigEndianToNative!ushort(tmp[0..2]);
+                w = bigEndianToNative!ushort(tmp[5..7]);
+                h = bigEndianToNative!ushort(tmp[3..5]);
+                chans = tmp[7];
+                return;
+            case SOS, EOI: throw new ImageIOException("no frame header");
+            case DRI, DHT, DQT, COM:
+            case APP0: .. case APPf:
+                ubyte[2] lenbuf = void;
+                stream.readExact(lenbuf, 2);
+                int skiplen = bigEndianToNative!ushort(lenbuf) - 2;
+                stream.seek(skiplen, SEEK_CUR);
+                break;
+            default: throw new ImageIOException("unsupported marker");
+        }
+    }
+    assert(0);
+}
+
 package IFImage read_jpeg(Reader stream, long req_chans = 0) {
     if (req_chans < 0 || 4 < req_chans)
         throw new ImageIOException("come on...");
@@ -57,7 +96,7 @@ package IFImage read_jpeg(Reader stream, long req_chans = 0) {
     // SOI
     ubyte[2] tmp = void;
     stream.readExact(tmp, tmp.length);
-    if (tmp[0..2] != jpeg_soi_marker)
+    if (tmp[0] != 0xff || tmp[1] != Marker.SOI)
         throw new ImageIOException("not JPEG");
 
     JPEG_Decoder dc = { stream: stream };
@@ -68,11 +107,23 @@ package IFImage read_jpeg(Reader stream, long req_chans = 0) {
 
     dc.tgt_chans = (req_chans == 0) ? dc.num_comps : cast(int) req_chans;
 
+    foreach (ref comp; dc.comps[0..dc.num_comps])
+        comp.data = new ubyte[dc.num_mcu_x*comp.sfx*8*dc.num_mcu_y*comp.sfy*8];
+
+    // E.7 -- Multiple scans are for progressive images which are not supported
+    //while (!dc.eoi_reached) {
+        decode_scan(dc);    // E.2.3
+        //read_markers(dc);   // reads until next scan header or eoi
+    //}
+
+    // throw away fill samples and convert to target format
+    ubyte[] pixels = dc.reconstruct();
+
     IFImage result = {
         w      : dc.width,
         h      : dc.height,
         c      : cast(ColFmt) dc.tgt_chans,
-        pixels : decode_jpeg(dc),
+        pixels : pixels,
     };
     return result;
 }
@@ -158,14 +209,12 @@ void read_markers(ref JPEG_Decoder dc) {
         while (marker[1] == 0xff)
             dc.stream.readExact(marker[1..$], 1);
 
-        debug(DebugJPEG) writefln("marker: %s (%1$x)\t", cast(Marker) marker[1]);
         switch (marker[1]) with (Marker) {
             case DHT: dc.read_huffman_tables(); break;
             case DQT: dc.read_quantization_tables(); break;
             case SOF0:
                 if (dc.has_frame_header)
                     throw new ImageIOException("extra frame header");
-                debug(DebugJPEG) writeln();
                 dc.read_frame_header();
                 dc.has_frame_header = true;
                 break;
@@ -179,7 +228,6 @@ void read_markers(ref JPEG_Decoder dc) {
             case EOI: dc.eoi_reached = true; break;
             case APP0: .. case APPf:
             case COM:
-                debug(DebugJPEG) writefln("-> skipping segment");
                 ubyte[2] lenbuf = void;
                 dc.stream.readExact(lenbuf, lenbuf.length);
                 int len = bigEndianToNative!ushort(lenbuf) - 2;
@@ -249,7 +297,7 @@ void derive_table(ref HuffTab table, in ref ubyte[16] num_values) {
         if (table.sizes[k] == 0)
             break;
 
-        debug(DebugJPEG) assert(si < table.sizes[k]);
+//        assert(si < table.sizes[k]);
         do {
             code <<= 1;
             ++si;
@@ -263,9 +311,8 @@ void derive_table(ref HuffTab table, in ref ubyte[16] num_values) {
 }
 
 // F.15
-void derive_mincode_maxcode_valptr(
-        ref short[16] mincode, ref short[16] maxcode, ref short[16] valptr,
-        in ref short[256] codes, in ref ubyte[16] num_values) pure
+void derive_mincode_maxcode_valptr(ref short[16] mincode, ref short[16] maxcode,
+     ref short[16] valptr, in ref short[256] codes, in ref ubyte[16] num_values) pure
 {
     mincode[] = -1;
     maxcode[] = -1;
@@ -353,10 +400,6 @@ void read_frame_header(ref JPEG_Decoder dc) {
     foreach (i; 0..dc.num_comps) {
         dc.comps[i].x = cast(size_t) ceil(dc.width * (cast(double) dc.comps[i].sfx / dc.hmax));
         dc.comps[i].y = cast(size_t) ceil(dc.height * (cast(double) dc.comps[i].sfy / dc.vmax));
-
-        debug(DebugJPEG) writefln("%d comp %d sfx/sfy: %d/%d", i, dc.comps[i].id,
-                                                                  dc.comps[i].sfx,
-                                                                  dc.comps[i].sfy);
     }
 
     size_t mcu_w = dc.hmax * 8;
@@ -386,8 +429,8 @@ void read_scan_header(ref JPEG_Decoder dc) {
          len != (6+num_scan_comps*2) )
         throw new ImageIOException("invalid / not supported");
 
-    auto buf = (cast(ubyte*) alloca((len-3) * ubyte.sizeof))[0..len-3];
-    dc.stream.readExact(buf, buf.length);
+    ubyte[16] buf;
+    dc.stream.readExact(buf, len-3);
 
     foreach (i; 0..num_scan_comps) {
         uint ci = buf[i*2] - ((dc.correct_comp_ids) ? 1 : 0);
@@ -415,28 +458,10 @@ void read_restart_interval(ref JPEG_Decoder dc) {
     if (len != 4)
         throw new ImageIOException("invalid / not supported");
     dc.restart_interval = bigEndianToNative!ushort(tmp[2..4]);
-    debug(DebugJPEG) writeln("restart interval set to: ", dc.restart_interval);
-}
-
-// reads data after the SOS segment
-ubyte[] decode_jpeg(ref JPEG_Decoder dc) {
-    foreach (ref comp; dc.comps[0..dc.num_comps])
-        comp.data = new ubyte[dc.num_mcu_x*comp.sfx*8*dc.num_mcu_y*comp.sfy*8];
-
-    // E.7 -- Multiple scans are for progressive images which are not supported
-    //while (!dc.eoi_reached) {
-        decode_scan(dc);    // E.2.3
-        //read_markers(dc);   // reads until next scan header or eoi
-    //}
-
-    // throw away fill samples and convert to target format
-    return dc.reconstruct();
 }
 
 // E.2.3 and E.8 and E.9
 void decode_scan(ref JPEG_Decoder dc) {
-    debug(DebugJPEG) writeln("decode scan...");
-
     int intervals, mcus;
     if (0 < dc.restart_interval) {
         int total_mcus = dc.num_mcu_x * dc.num_mcu_y;
@@ -446,7 +471,6 @@ void decode_scan(ref JPEG_Decoder dc) {
         intervals = 1;
         mcus = dc.num_mcu_x * dc.num_mcu_y;
     }
-    debug(DebugJPEG) writeln("intervals: ", intervals);
 
     foreach (mcu_j; 0 .. dc.num_mcu_y) {
         foreach (mcu_i; 0 .. dc.num_mcu_x) {
@@ -479,7 +503,8 @@ void decode_scan(ref JPEG_Decoder dc) {
 
                 if (intervals == 1) {
                     // last interval, may have fewer MCUs than defined by DRI
-                    mcus = (dc.num_mcu_y - mcu_j - 1) * dc.num_mcu_x + dc.num_mcu_x - mcu_i - 1;
+                    mcus = (dc.num_mcu_y - mcu_j - 1)
+                         * dc.num_mcu_x + dc.num_mcu_x - mcu_i - 1;
                 } else {
                     mcus = dc.restart_interval;
                 }
@@ -590,9 +615,8 @@ ubyte nextbit(ref JPEG_Decoder dc) {
 
         if (dc.cb == 0xff) {
             dc.stream.readExact(bytebuf, 1);
-            if (bytebuf[0] != 0x0) {
+            if (bytebuf[0] != 0x0)
                 throw new ImageIOException("unexpected marker");
-            }
         }
     }
 
@@ -621,8 +645,8 @@ ubyte[] reconstruct(in ref JPEG_Decoder dc) {
                     default: throw new ImageIOException("bug");
                 }
 
-                auto comp1 = new ubyte[](dc.width);
-                auto comp2 = new ubyte[](dc.width);
+                auto comp1 = new ubyte[dc.width];
+                auto comp2 = new ubyte[dc.width];
 
                 size_t s = 0;
                 size_t di = 0;
@@ -720,11 +744,11 @@ ubyte[] reconstruct(in ref JPEG_Decoder dc) {
 
 void upsample_h2_v2(in ubyte[] line0, in ubyte[] line1, ubyte[] result) {
     ubyte mix(ubyte mm, ubyte ms, ubyte sm, ubyte ss) {
-       return cast(ubyte) (( cast(uint) mm * 3 * 3
-                           + cast(uint) ms * 3 * 1
-                           + cast(uint) sm * 1 * 3
-                           + cast(uint) ss * 1 * 1
-                           + 8) / 16);
+        return cast(ubyte) (( cast(uint) mm * 3 * 3
+                            + cast(uint) ms * 3 * 1
+                            + cast(uint) sm * 1 * 3
+                            + cast(uint) ss * 1 * 1
+                            + 8) / 16);
     }
 
     result[0] = cast(ubyte) (( cast(uint) line0[0] * 3
@@ -1011,47 +1035,4 @@ pure ubyte stbi__clamp(int x) {
    return cast(ubyte) x;
 }
 
-static immutable ubyte[2] jpeg_soi_marker = [0xff, 0xd8];
-
-// the above is adapted from stb_image
 // ------------------------------------------------------------
-
-package void read_jpeg_info(Reader stream, out int w, out int h, out int chans) {
-    ubyte[2] marker = void;
-    stream.readExact(marker, 2);
-
-    // SOI
-    if (marker[0..2] != jpeg_soi_marker)
-        throw new ImageIOException("not JPEG");
-
-    while (true) {
-        stream.readExact(marker, 2);
-
-        if (marker[0] != 0xff)
-            throw new ImageIOException("no frame header");
-        while (marker[1] == 0xff)
-            stream.readExact(marker[1..$], 1);
-
-        switch (marker[1]) with (Marker) {
-            case SOF0: .. case SOF3:
-            case SOF9: .. case SOF11:
-                ubyte[8] tmp;
-                stream.readExact(tmp[0..8], 8);
-                //int len = bigEndianToNative!ushort(tmp[0..2]);
-                w = bigEndianToNative!ushort(tmp[5..7]);
-                h = bigEndianToNative!ushort(tmp[3..5]);
-                chans = tmp[7];
-                return;
-            case SOS, EOI: throw new ImageIOException("no frame header");
-            case DRI, DHT, DQT, COM:
-            case APP0: .. case APPf:
-                ubyte[2] lenbuf = void;
-                stream.readExact(lenbuf, 2);
-                int skiplen = bigEndianToNative!ushort(lenbuf) - 2;
-                stream.seek(skiplen, SEEK_CUR);
-                break;
-            default: throw new ImageIOException("unsupported marker");
-        }
-    }
-    assert(0);
-}

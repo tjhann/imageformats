@@ -279,7 +279,7 @@ ubyte[] decode_tga(ref TGA_Decoder dc) {
 // TGA encoder
 
 immutable ubyte[18] tga_footer_sig =
-    ['T','R','U','E','V','I','S','I','O','N','-','X','F','I','L','E','.', 0];
+    cast(immutable(ubyte)[18]) "TRUEVISION-XFILE.\0";
 
 struct TGA_Encoder {
     Writer stream;
@@ -370,7 +370,7 @@ ubyte[] rle_compress(in ubyte[] line, ubyte[] tgt_cmp, in size_t w, in int bytes
     size_t raw_i = 0; // start of raw packet data in line
     size_t cmp_i = 0;
     size_t pixels_left = w;
-    const (ubyte)[] px;
+    const(ubyte)[] px;
     for (size_t i = bytes_pp; pixels_left; i += bytes_pp) {
         runlen = 1;
         px = line[i-bytes_pp .. i];
