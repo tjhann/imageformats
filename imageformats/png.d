@@ -1,10 +1,11 @@
 module imageformats.png;
 
+import etc.c.zlib;
 import std.algorithm  : min, reverse;
 import std.bitmanip   : bigEndianToNative, nativeToBigEndian;
 import std.stdio      : File, SEEK_SET;
 import std.digest.crc : CRC32, crc32Of;
-import std.zlib       : UnCompress, HeaderFormat, compress;
+import std.zlib       : compress;
 import std.typecons   : scoped;
 import imageformats;
 
@@ -216,17 +217,19 @@ struct PNG_Decoder {
     int w, h;
     ubyte ilace;
 
-    UnCompress uc;
     CRC32 crc;
     ubyte[12] chunkmeta;  // crc | length and type
     ubyte[] read_buf;
-    ubyte[] uc_buf;     // uncompressed
     ubyte[] palette;
     ubyte[] transparency;
+
+    // decompression
+    z_stream*   z;              // zlib stream
+    uint        avail_idat;     // available bytes in current idat chunk
+    ubyte[]     idat_window;    // slice of read_buf
 }
 
 Buffer decode_png(ref PNG_Decoder dc) {
-    dc.uc = new UnCompress(HeaderFormat.deflate);
     dc.read_buf = new ubyte[4096];
 
     enum Stage {
@@ -253,6 +256,11 @@ Buffer decode_png(ref PNG_Decoder dc) {
                       (stage == Stage.PLTE_parsed && dc.src_indexed)) )
                     throw new ImageIOException("corrupt chunk stream");
                 result = read_IDAT_stream(dc, len);
+                dc.stream.readExact(dc.chunkmeta, 12); // crc | len, type
+                ubyte[4] crc = dc.crc.finish;
+                reverse(crc[]);
+                if (crc != dc.chunkmeta[0..4])
+                    throw new ImageIOException("corrupt chunk");
                 stage = Stage.IDAT_parsed;
                 break;
             case "PLTE":
@@ -347,7 +355,14 @@ union Buffer {
 Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
     assert(dc.req_bpc == 8 || dc.req_bpc == 16);
 
-    bool metaready = false;     // chunk len, type, crc
+    // initialize zlib stream
+    z_stream z = { zalloc: null, zfree: null, opaque: null };
+    if (inflateInit(&z) != Z_OK)
+        throw new ImageIOException("can't init zlib");
+    dc.z = &z;
+    dc.avail_idat = len;
+    scope(exit)
+        inflateEnd(&z);
 
     const size_t filter_step = dc.src_indexed
                              ? 1 : dc.src_chans * (dc.bpc == 8 ? 1 : 2);
@@ -370,7 +385,7 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
 
         size_t ti = 0;    // target index
         foreach (j; 0 .. dc.h) {
-            uncompress_line(dc, len, metaready, cline);
+            uncompress(dc, cline);
             ubyte filter_type = cline[0];
 
             recon(cline[1..$], pline[1..$], filter_type, filter_step);
@@ -428,7 +443,7 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
             pln[] = 0;
 
             foreach (j; 0 .. redh[pass]) {
-                uncompress_line(dc, len, metaready, cln);
+                uncompress(dc, cln);
                 ubyte filter_type = cln[0];
 
                 recon(cln[1..$], pln[1..$], filter_type, filter_step);
@@ -465,14 +480,6 @@ Buffer read_IDAT_stream(ref PNG_Decoder dc, int len) {
                 cln = _swap;
             }
         }
-    }
-
-    if (!metaready) {
-        dc.stream.readExact(dc.chunkmeta, 12);   // crc | len & type
-        ubyte[4] crc = dc.crc.finish;
-        reverse(crc[]);
-        if (crc != dc.chunkmeta[0..4])
-            throw new ImageIOException("corrupt chunk");
     }
 
     Buffer result;
@@ -539,52 +546,46 @@ pure nothrow {
   size_t a7_red7_to_dst(size_t redx, size_t redy, size_t dstw) { return (redy*2+1)*dstw + redx;   }
 }
 
-void uncompress_line(ref PNG_Decoder dc, ref int avail, ref bool metaready, ubyte[] dst)
+// Uncompresses a line from the IDAT stream into dst.
+void uncompress(ref PNG_Decoder dc, ubyte[] dst)
 {
-    size_t readysize = min(dst.length, dc.uc_buf.length);
-    dst[0 .. readysize] = dc.uc_buf[0 .. readysize];
-    dc.uc_buf = dc.uc_buf[readysize .. $];
+    dc.z.avail_out = cast(uint) dst.length;
+    dc.z.next_out = dst.ptr;
 
-    while (readysize != dst.length) {
-        // need new data for dc.uc_buf...
-        if (avail <= 0) {  // IDAT is read -> read next chunks meta
-            dc.stream.readExact(dc.chunkmeta, 12);   // crc | len & type
-            ubyte[4] crc = dc.crc.finish;
-            reverse(crc[]);
-            if (crc != dc.chunkmeta[0..4])
-                throw new ImageIOException("corrupt chunk");
-
-            avail = bigEndianToNative!int(dc.chunkmeta[4..8]);
-            if (dc.chunkmeta[8..12] != "IDAT") {
-                // no new IDAT chunk so flush, this is the end of the IDAT stream
-                metaready = true;
-                dc.uc_buf = cast(ubyte[]) dc.uc.flush();
-                size_t part2 = dst.length - readysize;
-                if (dc.uc_buf.length < part2)
+    while (true) {
+        if (!dc.z.avail_in) {
+            if (!dc.avail_idat) {
+                dc.stream.readExact(dc.chunkmeta, 12);   // crc | len & type
+                ubyte[4] crc = dc.crc.finish;
+                reverse(crc[]);
+                if (crc != dc.chunkmeta[0..4])
+                    throw new ImageIOException("corrupt chunk");
+                dc.avail_idat = bigEndianToNative!uint(dc.chunkmeta[4..8]);
+                if (!dc.avail_idat)
+                    throw new ImageIOException("invalid data");
+                if (dc.chunkmeta[8..12] != "IDAT")
                     throw new ImageIOException("not enough data");
-                dst[readysize .. readysize+part2] = dc.uc_buf[0 .. part2];
-                dc.uc_buf = dc.uc_buf[part2 .. $];
-                return;
+                dc.crc.put(dc.chunkmeta[8..12]);
             }
-            if (avail <= 0)    // empty IDAT chunk
-                throw new ImageIOException("not enough data");
-            dc.crc.put(dc.chunkmeta[8..12]);  // type
+
+            const size_t n = min(dc.avail_idat, dc.read_buf.length);
+            dc.stream.readExact(dc.read_buf, n);
+            dc.idat_window = dc.read_buf[0..n];
+
+            if (!dc.idat_window)
+                throw new ImageIOException("TODO");
+            dc.crc.put(dc.idat_window);
+            dc.avail_idat -= cast(uint) dc.idat_window.length;
+            dc.z.avail_in = cast(uint) dc.idat_window.length;
+            dc.z.next_in = dc.idat_window.ptr;
         }
 
-        size_t bytes = min(avail, dc.read_buf.length);
-        dc.stream.readExact(dc.read_buf, bytes);
-        avail -= bytes;
-        dc.crc.put(dc.read_buf[0..bytes]);
+        int q = inflate(dc.z, Z_NO_FLUSH);
 
-        if (bytes <= 0)
-            throw new ImageIOException("not enough data");
-
-        dc.uc_buf = cast(ubyte[]) dc.uc.uncompress(dc.read_buf[0..bytes].dup);
-
-        size_t part2 = min(dst.length - readysize, dc.uc_buf.length);
-        dst[readysize .. readysize+part2] = dc.uc_buf[0 .. part2];
-        dc.uc_buf = dc.uc_buf[part2 .. $];
-        readysize += part2;
+        if (dc.z.avail_out == 0)
+            return;
+        if (q != Z_OK)
+            throw new ImageIOException("zlib error");
     }
 }
 
