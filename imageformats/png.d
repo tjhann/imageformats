@@ -5,7 +5,6 @@ import std.algorithm  : min, reverse;
 import std.bitmanip   : bigEndianToNative, nativeToBigEndian;
 import std.stdio      : File, SEEK_SET;
 import std.digest.crc : CRC32, crc32Of;
-import std.zlib       : compress;
 import std.typecons   : scoped;
 import imageformats;
 
@@ -661,6 +660,8 @@ void write_png(Writer stream, long w, long h, in ubyte[] data, long tgt_chans = 
     stream.flush();
 }
 
+enum MAXIMUM_CHUNK_SIZE = 8192;
+
 struct PNG_Encoder {
     Writer stream;
     size_t w, h;
@@ -668,11 +669,9 @@ struct PNG_Encoder {
     uint tgt_chans;
     const(ubyte)[] data;
 
-    CRC32 crc;
-
-    uint writelen;      // how much written of current idat data
-    ubyte[] chunk_buf;  // len type data crc
-    ubyte[] data_buf;   // slice of chunk_buf, for just chunk data
+    CRC32       crc;
+    z_stream*   z;
+    ubyte[]     idatbuf;
 }
 
 void write_png(ref PNG_Encoder ec) {
@@ -699,75 +698,87 @@ void write_png(ref PNG_Encoder ec) {
 }
 
 void write_IDATs(ref PNG_Encoder ec) {
-    const int max_idatlen = 4 * 4096;
-    ec.writelen = 0;
-    ec.chunk_buf = new ubyte[8 + max_idatlen + 4];
-    ec.data_buf = ec.chunk_buf[8 .. 8 + max_idatlen];
-    static immutable ubyte[4] IDAT = ['I','D','A','T'];
-    ec.chunk_buf[4 .. 8] = IDAT;
-
-    const size_t linesize = ec.w * ec.tgt_chans + 1; // +1 for filter type
-    ubyte[] cline = new ubyte[linesize];
-    ubyte[] pline = new ubyte[linesize];    // initialized to 0
-
-    ubyte[] filtered_line = new ubyte[linesize];
-    ubyte[] filtered_image;
+    // initialize zlib stream
+    z_stream z = { zalloc: null, zfree: null, opaque: null };
+    if (deflateInit(&z, Z_DEFAULT_COMPRESSION) != Z_OK)
+        throw new ImageIOException("zlib init error");
+    scope(exit)
+        deflateEnd(ec.z);
+    ec.z = &z;
 
     const LineConv!ubyte convert = get_converter!ubyte(ec.src_chans, ec.tgt_chans);
 
     const size_t filter_step = ec.tgt_chans;   // step between pixels, in bytes
-    const size_t src_linesize = ec.w * ec.src_chans;
+    const size_t slinesz = ec.w * ec.src_chans;
+    const size_t tlinesz = ec.w * ec.tgt_chans + 1;
+    const size_t workbufsz = 3 * tlinesz + MAXIMUM_CHUNK_SIZE;
 
-    size_t si = 0;
-    foreach (j; 0 .. ec.h) {
-        convert(ec.data[si .. si+src_linesize], cline[1..$]);
-        si += src_linesize;
+    ubyte[] workbuf  = new ubyte[workbufsz];
+    ubyte[] cline    = workbuf[0 .. tlinesz];
+    ubyte[] pline    = workbuf[tlinesz .. 2 * tlinesz];
+    ubyte[] filtered = workbuf[2 * tlinesz .. 3 * tlinesz];
+    ec.idatbuf       = workbuf[$-MAXIMUM_CHUNK_SIZE .. $];
+    workbuf[0..$] = 0;
+    ec.z.avail_out = cast(uint) ec.idatbuf.length;
+    ec.z.next_out = ec.idatbuf.ptr;
 
+    const size_t ssize = ec.w * ec.src_chans * ec.h;
+
+    for (size_t si; si < ssize; si += slinesz) {
+        convert(ec.data[si .. si + slinesz], cline[1..$]);
+
+        // these loops could be merged with some extra space...
         foreach (i; 1 .. filter_step+1)
-            filtered_line[i] = cast(ubyte) (cline[i] - paeth(0, pline[i], 0));
-        foreach (i; filter_step+1 .. cline.length)
-            filtered_line[i] = cast(ubyte)
-                (cline[i] - paeth(cline[i-filter_step], pline[i], pline[i-filter_step]));
+            filtered[i] = cast(ubyte) (cline[i] - paeth(0, pline[i], 0));
+        foreach (i; filter_step+1 .. tlinesz)
+            filtered[i] = cast(ubyte)
+            (cline[i] - paeth(cline[i-filter_step], pline[i], pline[i-filter_step]));
+        filtered[0] = PNG_FilterType.Paeth;
 
-        filtered_line[0] = PNG_FilterType.Paeth;
-
-        filtered_image ~= filtered_line;
-
+        compress(ec, filtered);
         ubyte[] _swap = pline;
         pline = cline;
         cline = _swap;
     }
 
-    const (void)[] xx = compress(filtered_image, 6);
-
-    ec.write_to_IDAT_stream(xx);
-    if (0 < ec.writelen)
-        ec.write_IDAT_chunk();
-}
-
-void write_to_IDAT_stream(ref PNG_Encoder ec, in void[] _compressed) {
-    ubyte[] compressed = cast(ubyte[]) _compressed;
-    while (compressed.length) {
-        size_t space_left = ec.data_buf.length - ec.writelen;
-        size_t writenow_len = min(space_left, compressed.length);
-        ec.data_buf[ec.writelen .. ec.writelen + writenow_len] =
-            compressed[0 .. writenow_len];
-        ec.writelen += writenow_len;
-        compressed = compressed[writenow_len .. $];
-        if (ec.writelen == ec.data_buf.length)
-            ec.write_IDAT_chunk();
+    while (true) {  // flush zlib
+        int q = deflate(ec.z, Z_FINISH);
+        if (ec.idatbuf.length - ec.z.avail_out > 0)
+            flush_idat(ec);
+        if (q == Z_STREAM_END) break;
+        if (q == Z_OK) continue;    // not enough avail_out
+        throw new ImageIOException("zlib compression error");
     }
 }
 
-// chunk: len type data crc, type is already in buf
-void write_IDAT_chunk(ref PNG_Encoder ec) {
-    ec.chunk_buf[0 .. 4] = nativeToBigEndian!uint(ec.writelen);
-    ec.crc.put(ec.chunk_buf[4 .. 8 + ec.writelen]);   // crc of type and data
+void compress(ref PNG_Encoder ec, in ubyte[] line)
+{
+    ec.z.avail_in = cast(uint) line.length;
+    ec.z.next_in = line.ptr;
+    while (ec.z.avail_in) {
+        int q = deflate(ec.z, Z_NO_FLUSH);
+        if (q != Z_OK)
+            throw new ImageIOException("zlib compression error");
+        if (ec.z.avail_out == 0)
+            flush_idat(ec);
+    }
+}
+
+void flush_idat(ref PNG_Encoder ec)      // writes an idat chunk
+{
+    const uint len = cast(uint) (ec.idatbuf.length - ec.z.avail_out);
+    ec.crc.put(cast(const(ubyte)[]) "IDAT");
+    ec.crc.put(ec.idatbuf[0 .. len]);
+    ubyte[8] meta;
+    meta[0..4] = nativeToBigEndian!uint(len);
+    meta[4..8] = cast(ubyte[4]) "IDAT";
+    ec.stream.rawWrite(meta);
+    ec.stream.rawWrite(ec.idatbuf[0 .. len]);
     ubyte[4] crc = ec.crc.finish();
     reverse(crc[]);
-    ec.chunk_buf[8 + ec.writelen .. 8 + ec.writelen + 4] = crc;
-    ec.stream.rawWrite(ec.chunk_buf[0 .. 8 + ec.writelen + 4]);
-    ec.writelen = 0;
+    ec.stream.rawWrite(crc[0..$]);
+    ec.z.next_out = ec.idatbuf.ptr;
+    ec.z.avail_out = cast(uint) ec.idatbuf.length;
 }
 
 package void read_png_info(Reader stream, out int w, out int h, out int chans) {
