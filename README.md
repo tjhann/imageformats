@@ -4,12 +4,16 @@
 - Image data can be converted to Y, YA, RGB or RGBA.
 - There's a `@nogc` remake: [imagefmt](https://github.com/lgvz/imagefmt)
 
-| Format | Decoder            | Encoder                           |
-| ---    | ---                | ---                               |
-| png    | 8-bit, 16-bit      | 8-bit non-paletted non-interlaced |
-| tga    | 8-bit non-paletted | 8-bit non-paletted                |
-| bmp    | 8-bit              | 8-bit uncompressed                |
-| jpeg   | baseline           | nope                              |
+**Decoders:**
+- PNG. 8-bit and 16-bit interlaced and paletted (+`tRNS` chunk)
+- TGA. 8-bit non-paletted
+- BMP. 8-bit uncompressed
+- JPEG. baseline
+
+**Encoders:**
+- PNG. 8-bit non-paletted non-interlaced
+- TGA. 8-bit non-paletted rle-compressed
+- BMP. 8-bit uncompressed
 
 ```D
 import imageformats;
