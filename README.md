@@ -27,7 +27,7 @@ void main() {
     write_image("peruna.tga", i0.w, i0.h, i0.pixels, ColFmt.RGBA);
 
     int w, h, chans;
-    read_image_info("peruna.png", w, h, chans);     // no decoding
+    read_image_info("peruna.png", w, h, chans);
 
     // format specific functions
     PNG_Header hdr = read_png_header("peruna.png");
@@ -35,5 +35,3 @@ void main() {
     write_tga("porkkana.tga", i3.w, i3.h, i3.pixels);
 }
 ```
-
-**Tipjar**: `nano_1xeof5x1ukki4awa7fp9gyb3qsymmrr4s3i8o63okzdq3bhsdj56nefm9shs`
