@@ -10,7 +10,7 @@ public import imageformats.tga;
 public import imageformats.bmp;
 public import imageformats.jpeg;
 
-/// Image with 8-bit channels.
+/// Image with 8-bit channels. Top-left corner at (0, 0).
 struct IFImage {
     /// width
     int         w;
@@ -22,7 +22,7 @@ struct IFImage {
     ubyte[]     pixels;
 }
 
-/// Image with 16-bit channels.
+/// Image with 16-bit channels. Top-left corner at (0, 0).
 struct IFImage16 {
     /// width
     int         w;
