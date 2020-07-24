@@ -2,7 +2,7 @@
 
 - Returned image data is 8-bit except PNG can also return 16-bit.
 - Image data can be converted to Y, YA, RGB or RGBA.
-- There's a `@nogc` remake: [imagefmt](https://github.com/lgvz/imagefmt)
+- There's a `@nogc` remake: [imagefmt](https://github.com/tjhann/imagefmt)
 
 **Decoders:**
 - PNG. 8-bit and 16-bit interlaced and paletted (+`tRNS` chunk)
